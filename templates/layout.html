@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, width=device-width">
+    <!-- Favicon -->
+    <link href="{{ url_for('static', filename='favicon.ico') }}" rel="icon">
+    <!-- Custom styles -->
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+    <!-- Google Fonts: Averia Serif Libre -->
+    <link href="https://fonts.googleapis.com/css2?family=Averia+Libre:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Averia+Serif+Libre:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mate:ital@0;1&display=swap" rel="stylesheet">
+    
+    <title>My Tarot</title>
+</head>
+<body>
+    <div class="container4cantos">
+        <div class="decorCantos top-left"></div>
+        <div class="decorCantos top-right"></div>
+        <div class="decorCantos bottom-left"></div>
+        <div class="decorCantos bottom-right"></div>
+    </div>
+    <div class="decorCentro">
+        <img src="/static/img/rota.png" class="decorCentroAnimate">
+    </div>
+    
+    <nav class="navbar">
+        <div class="logo">myTarot</div>
+    </nav>
+    <div class="container">
+        {% block content %}
+        {% endblock %} 
+    </div>
+
+</body>
+</html>
+
+<!-- 
+<div class="container">
+    <div class="item">
+        <span class="logo">myTarot</span> 
+    </div>
+    <div class="item item-multiline">
+        <p>desvende os mistérios do Tarot com</p>
+        <p>a ajuda da inteligência artificial,</p>
+        <p>explore as profundezas da sua alma e </p>
+        <p>encontre respostas para suas perguntas.</p>
+    </div>
+
+</div>
+ -->
