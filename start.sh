@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Activate your virtualenv
-source $VIRTUAL_ENV/bin/activate
 
 # Monkey-patch BEFORE anything imports ssl (including gunicorn and your app)
 exec python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); import app" # Import app *after* patching, so all subsequent imports are also patched
