@@ -1,7 +1,10 @@
 #!/bin/bash
 
-if [[ -z "$RENDER" ]]; then  # Not on Render
-  python -c "from app import app; app.run(debug=True)"  # Local development
-else # Running on render
-  python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); from app import app; app.run(debug=False, host='0.0.0.0', port=$PORT)" # Production on Render
-fi
+# Activate your virtualenv
+source $VIRTUAL_ENV/bin/activate
+
+# Monkey-patch BEFORE anything imports ssl (including gunicorn and your app)
+exec python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); import app" # Import app *after* patching, so all subsequent imports are also patched
+
+# Now run gunicorn in the patched environment – it inherits the patched environment due to `exec`
+exec gunicorn -k gevent app:app -b 0.0.0.0:$PORT  # or -b :$PORT
