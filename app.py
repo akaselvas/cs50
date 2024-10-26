@@ -13,7 +13,7 @@ import threading
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (Flask, flash, redirect, render_template, request,
-                   session, url_for, g, jsonify)
+                   session, url_for, g, jsonify, make_response)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
