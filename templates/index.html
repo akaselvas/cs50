@@ -59,9 +59,8 @@
                 alert('Por favor, selecione o número de cartas antes de continuar.');
                 return;
             }
-
             const formData = new FormData(form);
-
+            
             try {
                 const response = await fetch(form.action, {
                     method: 'POST',
@@ -72,11 +71,14 @@
                     },
                     credentials: 'same-origin'
                 });
-
                 const data = await response.json();
                 if (response.ok) {
                     window.location.href = data.redirect;
                 } else {
+                    if (data.error && data.error.includes('CSRF')) {
+                        window.location.reload();
+                        return;
+                    }
                     alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
                 }
             } catch (error) {
@@ -85,5 +87,8 @@
             }
         });
     });
+
+
+
 </script>
 {% endblock %}
