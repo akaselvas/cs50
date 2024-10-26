@@ -10,7 +10,7 @@
         <p>digite sua intenção no campo abaixo para uma leitura personalizada, se preferir manter a intenção em segredo
             deixe o campo em branco.</p>
     </div>
-    <form id="tarotForm" >
+    <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
@@ -32,75 +32,55 @@
         </div>
     </form>
 </div>
-
 <script nonce="{{ g.nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
-        const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-        const csrfInput = document.querySelector('input[name="csrf_token"]');
-
-        if (csrfInput) {
-            csrfInput.value = csrfToken;
-        }
-
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
-
-        selectedCardsInput.value = null; // Allow blank intention
-
+        
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
-                // Enable and reset all buttons
                 botoes.forEach(b => {
-                    b.disabled = false;
                     b.classList.remove('active');
-                    b.style.opacity = 1; 
+                    b.style.opacity = '0.5';
+                    b.disabled = true;
                 });
-
-                // Disable and highlight the selected button
-                botao.disabled = true;  // Disable clicked button.
-                botao.classList.add('active'); // Add active class.
-                botao.style.opacity = 1; // Keep opacity at 1.
-                selectedCardsInput.value = botao.dataset.value; 
+                botao.classList.add('active');
+                botao.style.opacity = '1';
+                selectedCardsInput.value = botao.dataset.value;
             });
         });
-
+    
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
-
             if (!selectedCardsInput.value) {
                 alert('Por favor, selecione o número de cartas antes de continuar.');
                 return;
             }
-
+            const formData = new FormData(form);
+            
             try {
-                const formData = new FormData(this);
-                const response = await fetch('/process_form', {
+                const response = await fetch(form.action, {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'X-Requested-With': 'XMLHttpRequest',
                     },
                     credentials: 'same-origin'
                 });
-
+                const data = await response.json();
                 if (response.ok) {
-                    const data = await response.json();
-                    window.location.href = data.redirect; // Redirect only if response is OK and contains a redirect.
+                    window.location.href = data.redirect;
                 } else {
-                    const errorData = await response.json();
-                    // Check if there's an error message from the server
-                    if (errorData && errorData.error) {
-                        alert(errorData.error);
-
-                    } else {
-                        alert('Ocorreu um erro. Por favor, tente novamente.');
+                    if (data.error && data.error.includes('CSRF')) {
+                        window.location.reload();
+                        return;
                     }
-                   
+                    alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
                 }
             } catch (error) {
-                console.error('Form submission error:', error);
-                alert('Ocorreu um erro na submissão do formulário.');
+                console.error('Submission error:', error);
+                alert('Ocorreu um erro. Por favor, tente novamente.');
             }
         });
     });
