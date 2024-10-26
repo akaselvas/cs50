@@ -2,22 +2,21 @@
 {% block content %}
 <div class="insideIndex">
     <div class="texto-destacado">
-        <p>desvende os mistérios do Tarot com a ajuda da inteligência artificial, explore as profundezas da sua alma e
+        <p>Desvende os mistérios do Tarot com a ajuda da inteligência artificial, explore as profundezas da sua alma e
             encontre respostas para suas perguntas.</p>
     </div>
     <div class="txt-parafrafo">
-        <p>quer saber o que o futuro reserva?</p>
-        <p>digite sua intenção no campo abaixo para uma leitura personalizada, se preferir manter a intenção em segredo
-            deixe o campo em branco.</p>
+        <p>Quer saber o que o futuro reserva?</p>
+        <p>Digite sua intenção no campo abaixo para uma leitura personalizada, ou deixe o campo em branco para manter a intenção em segredo.</p>
     </div>
     <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ form.csrf_token }}
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
                 placeholder="Escreva sua intenção aqui..." autocomplete="off">
         </div>
         <div class="txt-parafrafo">
-            <p>escolha com quantas cartas você quer jogar</p>
+            <p>Escolha com quantas cartas você quer jogar</p>
             <div class="container-botoes">
                 <button type="button" class="botao-personalizado" data-value="1">1</button>
                 <button type="button" class="botao-personalizado" data-value="3">3</button>
@@ -27,7 +26,7 @@
         <input type="hidden" id="selectedCards" name="selectedCards" value="">
         <div>
             <button type="submit" class="botao-texto-grande">
-                vamos começar
+                Vamos Começar
             </button>
         </div>
     </form>
@@ -37,45 +36,40 @@
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
-        
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
-                botoes.forEach(b => {
-                    b.classList.remove('active');
-                    b.style.opacity = '0.5';
-                    b.disabled = true;
-                });
+                botoes.forEach(b => b.classList.remove('active'));
                 botao.classList.add('active');
-                botao.style.opacity = '1';
                 selectedCardsInput.value = botao.dataset.value;
             });
         });
-    
+
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
             if (!selectedCardsInput.value) {
                 alert('Por favor, selecione o número de cartas antes de continuar.');
                 return;
             }
+
             const formData = new FormData(form);
-            
+
             try {
                 const response = await fetch(form.action, {
                     method: 'POST',
                     body: formData,
                     headers: {
+                        'X-CSRFToken': csrfToken,
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                     credentials: 'same-origin'
                 });
+
                 const data = await response.json();
                 if (response.ok) {
                     window.location.href = data.redirect;
                 } else {
-                    if (data.error && data.error.includes('CSRF')) {
-                        window.location.reload();
-                        return;
-                    }
                     alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
                 }
             } catch (error) {
