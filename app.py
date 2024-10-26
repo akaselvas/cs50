@@ -253,10 +253,10 @@ def home():
     return resp
 
 
-@app.route('/get_csrf')
-def get_csrf():
-    csrf_token = generate_csrf()
-    return jsonify({'csrf_token': csrf_token})
+# @app.route('/get_csrf')
+# def get_csrf():
+#     csrf_token = generate_csrf()
+#     return jsonify({'csrf_token': csrf_token})
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
