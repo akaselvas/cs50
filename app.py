@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
+socketio = SocketIO(app)
 
 # Enhanced security configurations
 app.config.update(
@@ -78,6 +78,8 @@ limiter = Limiter(
     strategy="fixed-window",
     default_limits=["400 per day", "100 per hour"]
 )
+
+
 
 
 csp={
@@ -151,21 +153,21 @@ def before_request():
         session['csrf_token'] = generate_csrf()
 
 
-@app.after_request
-def refresh_csrf(response):
-    if 'text/html' in response.headers.get('Content-Type', ''):
-        # Set a specific expiration time
-        response.set_cookie(
-            'csrf_token',
-            generate_csrf(),
-            secure=False,
-            httponly=False,
-            samesite='Lax',  # Changed from 'Lax' to 'Strict'
-            max_age=1800,
-            domain=None,  # Explicitly set domain to None
-            path='/'      # Explicitly set path
-        )
-    return response
+# @app.after_request
+# def refresh_csrf(response):
+#     if 'text/html' in response.headers.get('Content-Type', ''):
+#         # Set a specific expiration time
+#         response.set_cookie(
+#             'csrf_token',
+#             generate_csrf(),
+#             secure=False,
+#             httponly=False,
+#             samesite='Lax',  # Changed from 'Lax' to 'Strict'
+#             max_age=1800,
+#             domain=None,  # Explicitly set domain to None
+#             path='/'      # Explicitly set path
+#         )
+#     return response
 
 # Add a new route to check CSRF token status
 @app.route('/check_csrf')
@@ -230,8 +232,25 @@ class TarotForm(FlaskForm):
 # Routes
 @app.route('/')
 def home():
-    form = TarotForm()  # Create a form instance
-    return render_template('index.html', form=form)
+    form = TarotForm()
+    resp = make_response(render_template('index.html', form=form))
+    
+    # Set CSRF token once during initial page load
+    csrf_token = generate_csrf()
+    session['csrf_token'] = csrf_token
+    
+    # Set cookie with proper security flags
+    resp.set_cookie(
+        'csrf_token',
+        csrf_token,
+        secure=False,  # Set to True if using HTTPS
+        httponly=False,
+        samesite='Lax',
+        max_age=1800,
+        path='/'
+    )
+    
+    return resp
 
 
 @app.route('/get_csrf')
@@ -243,23 +262,25 @@ def get_csrf():
 def process_form():
     form = TarotForm()
     
-    # Explicitly check CSRF token
-    if not form.csrf_token.validate(form):
-        return jsonify({'error': 'Invalid CSRF token'}), 400
+    if not form.validate():
+        flash('Por favor, tente novamente.', 'error')
+        return redirect(url_for('home'))
         
     intencao = sanitize_input(request.form.get('intencao', '').strip())
-    selected_cards = request.form.get('selectedCards')
+    selected_cards = request.form.get('selected_cards')
 
     if not selected_cards or selected_cards not in ['1', '3', '5']:
-        return jsonify({'error': 'Invalid card selection'}), 400
+        flash('Seleção de cartas inválida.', 'error')
+        return redirect(url_for('home'))
 
     if len(intencao) > 400:
-        return jsonify({'error': 'Intention too long'}), 400
+        flash('Intenção muito longa.', 'error')
+        return redirect(url_for('home'))
 
     session['intencao'] = intencao
     session['selected_cards'] = selected_cards
 
-    return jsonify({'redirect': url_for('cartas')})
+    return redirect(url_for('cartas'))
 
 
 @app.route('/cartas')
