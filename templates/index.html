@@ -41,11 +41,13 @@
         if (csrfInput) {
             csrfInput.value = csrfToken;
         }
-    
-        // Your existing button handling code
+
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
+
+        // Initialize selectedCardsInput to null, allowing for blank text input
+        selectedCardsInput.value = null;
     
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
@@ -70,42 +72,48 @@
                 return;
             }
     
-            // Ensure CSRF token is present and current
-            const currentCsrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const csrfInput = document.querySelector('input[name="csrf_token"]');
-            if (csrfInput) {
-                csrfInput.value = currentCsrfToken;
-            }
-    
             const formData = new FormData(form);
-    
-            try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    credentials: 'same-origin'
-                });
-    
-                const data = await response.json();
-                
-                if (response.ok) {
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+                const data = await response.json(); // Parse response if OK.
+
+                if (data.redirect) {  //Check for the redirect in the data.
                     window.location.href = data.redirect;
-                } else {
-                    if (data.error && data.error.includes('CSRF')) {
-                        // Refresh the page to get a new CSRF token
-                        window.location.reload();
-                        return;
-                    }
-                    alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
+                } else{
+                    // Handle the unlikely case where the server doesn't give a redirect.
+                    console.error('Server did not provide a redirect.');
+                    alert('Ocorreu um erro no servidor.');
                 }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('Ocorreu um erro. Por favor, tente novamente.');
+
+            } else {
+                const errorData = await response.json(); // Parse even for errors.
+
+                // Explicitly handle CSRF errors
+                if (errorData && errorData.error && errorData.error.includes('CSRF')) {
+                    window.location.reload(); // Reload to refresh CSRF token.
+                    return; //Stop further execution.
+                }
+
+                // Handle other errors as before.
+
+                // Show user friendly error message if available, otherwise, generic message.
+                alert(errorData.error || 'Ocorreu um erro. Por favor, tente novamente.'); 
             }
+        } catch (error) {
+            console.error('Submission error:', error);
+            alert('Ocorreu um erro na submissão do formulário.'); // More specific error message
+        }
         });
     });
-    </script>
+</script>
 {% endblock %}
