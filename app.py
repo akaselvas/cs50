@@ -24,6 +24,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import CSRFError
 from flask_wtf.csrf import generate_csrf
 from flask_wtf.csrf import validate_csrf
+from wtforms import Form, StringField, HiddenField
 
 from wtforms.validators import ValidationError  # You need this import for handling CSRF errors
 
@@ -223,14 +224,14 @@ TAROT_CARDS: List[Dict[str, str]] = [
         {"image": "/static/img/a22.jpg", "name": "O Louco"},
     ]
 
-class TarotForm(FlaskForm):
-    class Meta:
-        csrf = True 
+class TarotForm(Form):
+    intencao = StringField('Intenção')
+    selectedCards = HiddenField('Selected Cards')
 
 # Routes
 @app.route('/')
-def home():
-    form = TarotForm()  # Create a form instance
+def index():
+    form = TarotForm()
     return render_template('index.html', form=form)
 
 
@@ -241,25 +242,14 @@ def get_csrf():
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
-    form = TarotForm()
-
-    # Explicitly check CSRF token
-    if not form.csrf_token.validate(form):
-        return jsonify({'error': 'Invalid CSRF token'}), 400
-
-    intencao = sanitize_input(request.form.get('intencao', '').strip())
-    selected_cards = request.form.get('selectedCards')
-
-    if not selected_cards or selected_cards not in ['1', '3', '5']:
-        return jsonify({'error': 'Invalid card selection'}), 400
-
-    if len(intencao) > 400:
-        return jsonify({'error': 'Intention too long'}), 400
-
-    session['intencao'] = intencao
-    session['selected_cards'] = selected_cards
-
-    return jsonify({'redirect': url_for('cartas')})
+    form = TarotForm(request.form)
+    if form.validate_on_submit():
+        selected_cards = form.selectedCards.data
+        intencao = form.intencao.data
+        # Process 'intencao' and 'selected_cards' as needed
+        # Redirect to 'cartas' after successful form submission
+        return jsonify({'redirect': url_for('cartas')})
+    return jsonify({'error': 'Form validation failed or CSRF tokens do not match.'}), 400
 
 
 @app.route('/cartas')
