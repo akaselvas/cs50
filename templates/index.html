@@ -37,8 +37,9 @@
     document.addEventListener('DOMContentLoaded', function() {
         const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
         const csrfInput = document.querySelector('input[name="csrf_token"]');
+
         if (csrfInput) {
-            csrfInput.value = csrf_token;
+            csrfInput.value = csrfToken;
         }
 
         const form = document.getElementById('tarotForm');
@@ -47,22 +48,25 @@
 
         selectedCardsInput.value = null; // Allow blank intention
 
-
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
+                // Enable and reset all buttons
                 botoes.forEach(b => {
+                    b.disabled = false;
                     b.classList.remove('active');
-                    b.style.opacity = '1'; 
-                    b.disabled = false;    
+                    b.style.opacity = 1; 
                 });
-                botao.classList.add('active');
-                selectedCardsInput.value = botao.dataset.value; // Sets selectedCards in the hidden field.
+
+                // Disable and highlight the selected button
+                botao.disabled = true;  // Disable clicked button.
+                botao.classList.add('active'); // Add active class.
+                botao.style.opacity = 1; // Keep opacity at 1.
+                selectedCardsInput.value = botao.dataset.value; 
             });
         });
 
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
-
 
             if (!selectedCardsInput.value) {
                 alert('Por favor, selecione o número de cartas antes de continuar.');
@@ -70,8 +74,8 @@
             }
 
             try {
-                const formData = new FormData(this); // Use FormData from the form element
-                const response = await fetch('/process_form', {  // You can hardcode the route here.
+                const formData = new FormData(this);
+                const response = await fetch('/process_form', {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -82,29 +86,18 @@
 
                 if (response.ok) {
                     const data = await response.json();
-
-                    if (data.redirect) {
-                        window.location.href = data.redirect;
-                    } else {
-                        console.error('Server did not provide a redirect.');
-                        alert('Ocorreu um erro no servidor.');
-                    }
+                    window.location.href = data.redirect; // Redirect only if response is OK and contains a redirect.
                 } else {
-                     const errorData = await response.json();
-                     if (errorData && errorData.error) {
-                         // Display server-side errors or generic error message
-                          alert(errorData.error || 'Ocorreu um erro. Por favor, tente novamente.');
+                    const errorData = await response.json();
+                    // Check if there's an error message from the server
+                    if (errorData && errorData.error) {
+                        alert(errorData.error);
 
-                          // Check for CSRF error *after* displaying the server error
-                          if (errorData.error && errorData.error.includes('CSRF')) {
-                              window.location.reload();
-                          }
-
-                      } else { // If there's no server-provided error message
-                           alert('Ocorreu um erro. Por favor, tente novamente.');
-                      }
+                    } else {
+                        alert('Ocorreu um erro. Por favor, tente novamente.');
+                    }
+                   
                 }
-
             } catch (error) {
                 console.error('Form submission error:', error);
                 alert('Ocorreu um erro na submissão do formulário.');
