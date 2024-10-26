@@ -10,7 +10,7 @@
         <p>digite sua intenção no campo abaixo para uma leitura personalizada, se preferir manter a intenção em segredo
             deixe o campo em branco.</p>
     </div>
-    <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
+    <form id="tarotForm" >
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
@@ -35,84 +35,80 @@
 
 <script nonce="{{ g.nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
-        // Get CSRF token from cookie and set it in the form
         const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)csrf_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
         const csrfInput = document.querySelector('input[name="csrf_token"]');
         if (csrfInput) {
-            csrfInput.value = csrfToken;
+            csrfInput.value = csrf_token;
         }
 
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
 
-        // Initialize selectedCardsInput to null, allowing for blank text input
-        selectedCardsInput.value = null;
-    
+        selectedCardsInput.value = null; // Allow blank intention
+
+
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
                 botoes.forEach(b => {
                     b.classList.remove('active');
-                    b.style.opacity = '0.5';
-                    b.disabled = true;
+                    b.style.opacity = '1'; 
+                    b.disabled = false;    
                 });
                 botao.classList.add('active');
-                botao.style.opacity = '1';
-                selectedCardsInput.value = botao.dataset.value;
+                selectedCardsInput.value = botao.dataset.value; // Sets selectedCards in the hidden field.
             });
         });
-    
-        // Modified form submission with CSRF handling
+
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
-    
-            // Check for selected cards
+
+
             if (!selectedCardsInput.value) {
                 alert('Por favor, selecione o número de cartas antes de continuar.');
                 return;
             }
-    
-            const formData = new FormData(form);
 
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'same-origin'
-            });
+            try {
+                const formData = new FormData(this); // Use FormData from the form element
+                const response = await fetch('/process_form', {  // You can hardcode the route here.
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                });
 
-            if (response.ok) {
-                const data = await response.json(); // Parse response if OK.
+                if (response.ok) {
+                    const data = await response.json();
 
-                if (data.redirect) {  //Check for the redirect in the data.
-                    window.location.href = data.redirect;
-                } else{
-                    // Handle the unlikely case where the server doesn't give a redirect.
-                    console.error('Server did not provide a redirect.');
-                    alert('Ocorreu um erro no servidor.');
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        console.error('Server did not provide a redirect.');
+                        alert('Ocorreu um erro no servidor.');
+                    }
+                } else {
+                     const errorData = await response.json();
+                     if (errorData && errorData.error) {
+                         // Display server-side errors or generic error message
+                          alert(errorData.error || 'Ocorreu um erro. Por favor, tente novamente.');
+
+                          // Check for CSRF error *after* displaying the server error
+                          if (errorData.error && errorData.error.includes('CSRF')) {
+                              window.location.reload();
+                          }
+
+                      } else { // If there's no server-provided error message
+                           alert('Ocorreu um erro. Por favor, tente novamente.');
+                      }
                 }
 
-            } else {
-                const errorData = await response.json(); // Parse even for errors.
-
-                // Explicitly handle CSRF errors
-                if (errorData && errorData.error && errorData.error.includes('CSRF')) {
-                    window.location.reload(); // Reload to refresh CSRF token.
-                    return; //Stop further execution.
-                }
-
-                // Handle other errors as before.
-
-                // Show user friendly error message if available, otherwise, generic message.
-                alert(errorData.error || 'Ocorreu um erro. Por favor, tente novamente.'); 
+            } catch (error) {
+                console.error('Form submission error:', error);
+                alert('Ocorreu um erro na submissão do formulário.');
             }
-        } catch (error) {
-            console.error('Submission error:', error);
-            alert('Ocorreu um erro na submissão do formulário.'); // More specific error message
-        }
         });
     });
 </script>
