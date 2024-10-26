@@ -261,25 +261,25 @@ def get_csrf():
 @app.route('/process_form', methods=['POST'])
 def process_form():
     form = TarotForm()
+    
+    if not form.validate_on_submit():  # CSRF validation happens here
+        error_messages = [message for message in form.csrf_token.errors] 
+        return jsonify({'error': " ".join(error_messages) if error_messages else "Invalid CSRF Token"}), 400
 
-    if not form.validate_on_submit(): # Check CSRF token here
-        errors = {field.name: field.errors for field in form if field.errors}
-        return jsonify({'error': 'Form validation failed.', 'errors': errors}), 400 # Always return JSON on error
-
-
+    # Now proceed with other validations *after* CSRF check
     intencao = sanitize_input(request.form.get('intencao', '').strip())
     selected_cards = request.form.get('selected_cards')
 
     if not selected_cards or selected_cards not in ['1', '3', '5']:
-        return jsonify({'error': 'Invalid card selection'}), 400
+         return jsonify({'error': 'Selecione um número de cartas'}), 400
 
     if len(intencao) > 400:
-        return jsonify({'error': 'Intention too long'}), 400
+        return jsonify({'error': 'Intenção muito longa'}), 400
 
     session['intencao'] = intencao
     session['selected_cards'] = selected_cards
 
-    return jsonify({'redirect': url_for('cartas')})  # Always return JSON with redirect
+    return jsonify({'redirect': url_for('cartas')})
 
 
 @app.route('/cartas')
