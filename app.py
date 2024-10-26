@@ -13,7 +13,7 @@ import threading
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (Flask, flash, redirect, render_template, request,
-                   session, url_for, g, jsonify, make_response)
+                   session, url_for, g, jsonify)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
 
 # Enhanced security configurations
 app.config.update(
@@ -78,8 +78,6 @@ limiter = Limiter(
     strategy="fixed-window",
     default_limits=["400 per day", "100 per hour"]
 )
-
-
 
 
 csp={
@@ -144,8 +142,8 @@ def handle_csrf_error(e):
         # Handle regular form submissions
         flash('Security token has expired. Please try again.', 'error')
         return redirect(url_for('home'))
-    
-    
+
+
 @app.before_request
 def before_request():
     g.nonce = secrets.token_hex(16)
@@ -153,21 +151,21 @@ def before_request():
         session['csrf_token'] = generate_csrf()
 
 
-# @app.after_request
-# def refresh_csrf(response):
-#     if 'text/html' in response.headers.get('Content-Type', ''):
-#         # Set a specific expiration time
-#         response.set_cookie(
-#             'csrf_token',
-#             generate_csrf(),
-#             secure=False,
-#             httponly=False,
-#             samesite='Lax',  # Changed from 'Lax' to 'Strict'
-#             max_age=1800,
-#             domain=None,  # Explicitly set domain to None
-#             path='/'      # Explicitly set path
-#         )
-#     return response
+@app.after_request
+def refresh_csrf(response):
+    if 'text/html' in response.headers.get('Content-Type', ''):
+        # Set a specific expiration time
+        response.set_cookie(
+            'csrf_token',
+            generate_csrf(),
+            secure=False,
+            httponly=False,
+            samesite='Lax',  # Changed from 'Lax' to 'Strict'
+            max_age=1800,
+            domain=None,  # Explicitly set domain to None
+            path='/'      # Explicitly set path
+        )
+    return response
 
 # Add a new route to check CSRF token status
 @app.route('/check_csrf')
@@ -232,50 +230,31 @@ class TarotForm(FlaskForm):
 # Routes
 @app.route('/')
 def home():
-    form = TarotForm()
-    resp = make_response(render_template('index.html', form=form))
-    
-    # Set CSRF token once during initial page load
+    form = TarotForm()  # Create a form instance
+    return render_template('index.html', form=form)
+
+
+@app.route('/get_csrf')
+def get_csrf():
     csrf_token = generate_csrf()
-    session['csrf_token'] = csrf_token
-    
-    # Set cookie with proper security flags
-    resp.set_cookie(
-        'csrf_token',
-        csrf_token,
-        secure=False,  # Set to True if using HTTPS
-        httponly=False,
-        samesite='Lax',
-        max_age=1800,
-        path='/'
-    )
-    
-    return resp
-
-
-# @app.route('/get_csrf')
-# def get_csrf():
-#     csrf_token = generate_csrf()
-#     return jsonify({'csrf_token': csrf_token})
+    return jsonify({'csrf_token': csrf_token})
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
-    print(f"CSRF Token in session: {session.get('csrf_token')}") 
     form = TarotForm()
-    
-    if not form.validate_on_submit():  # CSRF validation happens here
-        error_messages = [message for message in form.csrf_token.errors] 
-        return jsonify({'error': " ".join(error_messages) if error_messages else "Invalid CSRF Token"}), 400
 
-    # Now proceed with other validations *after* CSRF check
+    # Explicitly check CSRF token
+    if not form.csrf_token.validate(form):
+        return jsonify({'error': 'Invalid CSRF token'}), 400
+
     intencao = sanitize_input(request.form.get('intencao', '').strip())
-    selected_cards = request.form.get('selected_cards')
+    selected_cards = request.form.get('selectedCards')
 
     if not selected_cards or selected_cards not in ['1', '3', '5']:
-         return jsonify({'error': 'Selecione um número de cartas'}), 400
+        return jsonify({'error': 'Invalid card selection'}), 400
 
     if len(intencao) > 400:
-        return jsonify({'error': 'Intenção muito longa'}), 400
+        return jsonify({'error': 'Intention too long'}), 400
 
     session['intencao'] = intencao
     session['selected_cards'] = selected_cards
@@ -298,7 +277,7 @@ def cartas():
     cards_group2 = shuffled_cards[7:15]
     cards_group3 = shuffled_cards[15:]
 
-    
+
 
     return render_template('cartas.html', cards_group1=cards_group1, cards_group2=cards_group2, cards_group3=cards_group3, selected_cards=selected_cards) 
 
@@ -334,7 +313,7 @@ def results():
 @socketio.on('start_generation')
 def handle_generation(data):
     csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
-    
+
     if not csrf_token:
         emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
         return
@@ -344,14 +323,14 @@ def handle_generation(data):
     except ValidationError as e:  # Catch validation errors
         emit('generation_error', {'message': str(e)}) # Emit an error event
         return
-    
+
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-    
+
     print(f"CSRF Token: {csrf_token}")  # Now it will only print if csrf_token is defined
-    
+
     emit('generation_complete', {'reading': reading_html})
 
 
@@ -382,7 +361,7 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     except Exception as e:
         logging.error(f"Error in tarot reading generation: {str(e)}")
         reading = "We're sorry, but we couldn't generate your tarot reading at this time. Please try again later."
-    
+
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
