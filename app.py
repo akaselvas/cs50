@@ -260,6 +260,7 @@ def get_csrf():
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
+    print(f"CSRF Token in session: {session.get('csrf_token')}") 
     form = TarotForm()
     
     if not form.validate_on_submit():  # CSRF validation happens here
