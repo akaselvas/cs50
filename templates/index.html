@@ -34,11 +34,11 @@
 </div>
 
 <script nonce="{{ g.nonce }}">
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
-        
+
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
                 botoes.forEach(b => {
@@ -51,7 +51,7 @@
                 selectedCardsInput.value = botao.dataset.value;
             });
         });
-    
+
         const updateCsrfToken = async () => {
             try {
                 const response = await fetch('/get_csrf');
@@ -64,8 +64,8 @@
         }
 
         await updateCsrfToken(); // Refresh token on page load
-        
-        form.addEventListener('submit', async function(e) {
+
+        form.addEventListener('submit', async function (e) {
             e.preventDefault();
 
             if (!selectedCardsInput.value) {
@@ -74,7 +74,7 @@
             }
 
             const formData = new FormData(form);
-            
+
             try {
                 const response = await fetch(form.action, {
                     method: 'POST',
@@ -92,18 +92,18 @@
                         alert("CSRF token mismatch. Please try again.");  // User-friendly message.
                         await updateCsrfToken() // Refresh the token before they resubmit
                         return; // Do NOT automatically resubmit
-                } else {
-                    if (data.error && data.error.includes('CSRF')) {
-                        window.location.reload();
-                        return;
+                    } else {
+                        if (data.error && data.error.includes('CSRF')) {
+                            window.location.reload();
+                            return;
+                        }
+                        alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
                     }
-                    alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
+                } catch (error) {
+                    console.error('Submission error:', error);
+                    alert('Ocorreu um erro. Por favor, tente novamente.');
                 }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('Ocorreu um erro. Por favor, tente novamente.');
-            }
-        });
+            });
     });
 </script>
 {% endblock %}
