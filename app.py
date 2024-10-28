@@ -148,24 +148,24 @@ def handle_csrf_error(e):
 def before_request():
     g.nonce = secrets.token_hex(16)
     if 'csrf_token' not in session:
-        session['csrf_token'] = generate_csrf()
+        session['csrf_token'] = generate_csrf() 
 
 
-@app.after_request
-def refresh_csrf(response):
-    if 'text/html' in response.headers.get('Content-Type', ''):
-        # Set a specific expiration time
-        response.set_cookie(
-            'csrf_token',
-            generate_csrf(),
-            secure=False,
-            httponly=False,
-            samesite='Lax',  # Changed from 'Lax' to 'Strict'
-            max_age=1800,
-            domain=None,  # Explicitly set domain to None
-            path='/'      # Explicitly set path
-        )
-    return response
+# @app.after_request
+# def refresh_csrf(response):
+#     if 'text/html' in response.headers.get('Content-Type', ''):
+#         # Set a specific expiration time
+#         response.set_cookie(
+#             'csrf_token',
+#             generate_csrf(),
+#             secure=False,
+#             httponly=False,
+#             samesite='Lax',  # Changed from 'Lax' to 'Strict'
+#             max_age=1800,
+#             domain=None,  # Explicitly set domain to None
+#             path='/'      # Explicitly set path
+#         )
+#     return response
 
 # Add a new route to check CSRF token status
 @app.route('/check_csrf')
@@ -239,27 +239,31 @@ def get_csrf():
     csrf_token = generate_csrf()
     return jsonify({'csrf_token': csrf_token})
 
+
 @app.route('/process_form', methods=['POST'])
 def process_form():
-    form = TarotForm()
-    
-    # Explicitly check CSRF token
-    if not form.csrf_token.validate(form):
-        return jsonify({'error': 'Invalid CSRF token'}), 400
-        
-    intencao = sanitize_input(request.form.get('intencao', '').strip())
-    selected_cards = request.form.get('selectedCards')
+    try:
+        validate_csrf(request.form.get('csrf_token'))  # Explicitly validate CSRF token
 
-    if not selected_cards or selected_cards not in ['1', '3', '5']:
-        return jsonify({'error': 'Invalid card selection'}), 400
+        intencao = sanitize_input(request.form.get('intencao', '').strip())
+        selected_cards = request.form.get('selectedCards')
 
-    if len(intencao) > 400:
-        return jsonify({'error': 'Intention too long'}), 400
+        if not selected_cards or selected_cards not in ['1', '3', '5']:
+            return jsonify({'error': 'Invalid card selection'}), 400
 
-    session['intencao'] = intencao
-    session['selected_cards'] = selected_cards
+        if len(intencao) > 400:
+            return jsonify({'error': 'Intention too long'}), 400
 
-    return jsonify({'redirect': url_for('cartas')})
+        session['intencao'] = intencao
+        session['selected_cards'] = selected_cards
+
+        return jsonify({'redirect': url_for('cartas')})
+
+    except ValidationError:  # Catch CSRF validation errors
+        return jsonify({'error': 'Invalid CSRF token'}), 400  # Return a specific error
+    except Exception as e: # Catch any other errors during form processing.
+        logging.error(f"Error in form processing: {str(e)}")  # Log the error for debugging
+        return jsonify({'error': 'An unexpected error occurred.'}), 500 # Give generic message to user, but specific info in the logs.
 
 
 @app.route('/cartas')
