@@ -24,7 +24,6 @@ from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import CSRFError
 from flask_wtf.csrf import generate_csrf
 from flask_wtf.csrf import validate_csrf
-from wtforms import Form, StringField, HiddenField
 
 from wtforms.validators import ValidationError  # You need this import for handling CSRF errors
 
@@ -143,8 +142,8 @@ def handle_csrf_error(e):
         # Handle regular form submissions
         flash('Security token has expired. Please try again.', 'error')
         return redirect(url_for('home'))
-
-
+    
+    
 @app.before_request
 def before_request():
     g.nonce = secrets.token_hex(16)
@@ -152,21 +151,21 @@ def before_request():
         session['csrf_token'] = generate_csrf()
 
 
-# @app.after_request
-# def refresh_csrf(response):
-#     if 'text/html' in response.headers.get('Content-Type', ''):
-#         # Set a specific expiration time
-#         response.set_cookie(
-#             'csrf_token',
-#             generate_csrf(),
-#             secure=False,
-#             httponly=False,
-#             samesite='Lax',  # Changed from 'Lax' to 'Strict'
-#             max_age=1800,
-#             domain=None,  # Explicitly set domain to None
-#             path='/'      # Explicitly set path
-#         )
-#     return response
+@app.after_request
+def refresh_csrf(response):
+    if 'text/html' in response.headers.get('Content-Type', ''):
+        # Set a specific expiration time
+        response.set_cookie(
+            'csrf_token',
+            generate_csrf(),
+            secure=False,
+            httponly=False,
+            samesite='Lax',  # Changed from 'Lax' to 'Strict'
+            max_age=1800,
+            domain=None,  # Explicitly set domain to None
+            path='/'      # Explicitly set path
+        )
+    return response
 
 # Add a new route to check CSRF token status
 @app.route('/check_csrf')
@@ -224,14 +223,14 @@ TAROT_CARDS: List[Dict[str, str]] = [
         {"image": "/static/img/a22.jpg", "name": "O Louco"},
     ]
 
-class TarotForm(FlaskForm):  # Inherit from FlaskForm
-    intencao = StringField('Intenção')
-    selectedCards = HiddenField('Selected Cards')
+class TarotForm(FlaskForm):
+    class Meta:
+        csrf = True 
 
 # Routes
 @app.route('/')
-def index():
-    form = TarotForm()
+def home():
+    form = TarotForm()  # Create a form instance
     return render_template('index.html', form=form)
 
 
@@ -242,19 +241,33 @@ def get_csrf():
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
-    form = TarotForm(request.form)
-    if form.validate_on_submit():
-        selected_cards = form.selectedCards.data
-        intencao = form.intencao.data
-        # Process 'intencao' and 'selected_cards' as needed
-        # Redirect to 'cartas' after successful form submission
-        return jsonify({'redirect': url_for('cartas')}) 
-    return jsonify({'error': 'Form validation failed or CSRF tokens do not match.'}), 400
+    form = TarotForm()
+    
+    # Explicitly check CSRF token
+    if not form.csrf_token.validate(form):
+        return jsonify({'error': 'Invalid CSRF token'}), 400
+        
+    intencao = sanitize_input(request.form.get('intencao', '').strip())
+    selected_cards = request.form.get('selectedCards')
+
+    if not selected_cards or selected_cards not in ['1', '3', '5']:
+        return jsonify({'error': 'Invalid card selection'}), 400
+
+    if len(intencao) > 400:
+        return jsonify({'error': 'Intention too long'}), 400
+
+    session['intencao'] = intencao
+    session['selected_cards'] = selected_cards
+
+    return jsonify({'redirect': url_for('cartas')})
 
 
 @app.route('/cartas')
 def cartas():
-    selected_cards = session.get('selected_cards', 0)
+    try:
+        selected_cards = int(session.get('selected_cards', 0))
+    except (TypeError, ValueError):
+        return redirect(url_for('home'))
 
     shuffled_cards = random.sample(TAROT_CARDS, len(TAROT_CARDS))
     for card in shuffled_cards:
@@ -264,7 +277,7 @@ def cartas():
     cards_group2 = shuffled_cards[7:15]
     cards_group3 = shuffled_cards[15:]
 
-
+    
 
     return render_template('cartas.html', cards_group1=cards_group1, cards_group2=cards_group2, cards_group3=cards_group3, selected_cards=selected_cards) 
 
@@ -300,7 +313,7 @@ def results():
 @socketio.on('start_generation')
 def handle_generation(data):
     csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
-
+    
     if not csrf_token:
         emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
         return
@@ -310,14 +323,14 @@ def handle_generation(data):
     except ValidationError as e:  # Catch validation errors
         emit('generation_error', {'message': str(e)}) # Emit an error event
         return
-
+    
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-
+    
     print(f"CSRF Token: {csrf_token}")  # Now it will only print if csrf_token is defined
-
+    
     emit('generation_complete', {'reading': reading_html})
 
 
@@ -348,7 +361,7 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     except Exception as e:
         logging.error(f"Error in tarot reading generation: {str(e)}")
         reading = "We're sorry, but we couldn't generate your tarot reading at this time. Please try again later."
-
+    
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
