@@ -11,7 +11,7 @@
             deixe o campo em branco.</p>
     </div>
     <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">  <!--- Add id here -->
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
                 placeholder="Escreva sua intenção aqui..." autocomplete="off">
@@ -34,7 +34,7 @@
 </div>
 
 <script nonce="{{ g.nonce }}">
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', async function () { // Make this async
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
@@ -59,11 +59,12 @@
                 document.getElementById('csrf_token').value = data.csrf_token;
             } catch (error) {
                 console.error('Error fetching CSRF token:', error);
-                // Consider showing a user-friendly error message.
+                alert("Could not fetch security token.  Please reload the page."); // User-friendly message
             }
-        }
+        };
 
-        await updateCsrfToken(); // Refresh token on page load
+
+        await updateCsrfToken(); // Await the token update
 
         form.addEventListener('submit', async function (e) {
             e.preventDefault();
@@ -88,22 +89,20 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    if (data.error && data.error.includes('CSRF')) {
-                        alert("CSRF token mismatch. Please try again.");  // User-friendly message.
-                        await updateCsrfToken() // Refresh the token before they resubmit
-                        return; // Do NOT automatically resubmit
+                    window.location.href = data.redirect;
+                } else {
+                     if (data.error && data.error.includes('CSRF')) {
+                        alert("CSRF token mismatch.  Please try again.");  // User-friendly message.
+                        await updateCsrfToken();  // Refresh the token
+                        return;  // Do NOT automatically resubmit - let the user try again.
                     } else {
-                        if (data.error && data.error.includes('CSRF')) {
-                            window.location.reload();
-                            return;
-                        }
                         alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
                     }
-                } catch (error) {
-                    console.error('Submission error:', error);
-                    alert('Ocorreu um erro. Por favor, tente novamente.');
                 }
-            });
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('Ocorreu um erro. Por favor, tente novamente.');
+            }
+        });
     });
 </script>
-{% endblock %}
