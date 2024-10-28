@@ -152,21 +152,21 @@ def before_request():
         session['csrf_token'] = generate_csrf()
 
 
-@app.after_request
-def refresh_csrf(response):
-    if 'text/html' in response.headers.get('Content-Type', ''):
-        # Set a specific expiration time
-        response.set_cookie(
-            'csrf_token',
-            generate_csrf(),
-            secure=False,
-            httponly=False,
-            samesite='Lax',  # Changed from 'Lax' to 'Strict'
-            max_age=1800,
-            domain=None,  # Explicitly set domain to None
-            path='/'      # Explicitly set path
-        )
-    return response
+# @app.after_request
+# def refresh_csrf(response):
+#     if 'text/html' in response.headers.get('Content-Type', ''):
+#         # Set a specific expiration time
+#         response.set_cookie(
+#             'csrf_token',
+#             generate_csrf(),
+#             secure=False,
+#             httponly=False,
+#             samesite='Lax',  # Changed from 'Lax' to 'Strict'
+#             max_age=1800,
+#             domain=None,  # Explicitly set domain to None
+#             path='/'      # Explicitly set path
+#         )
+#     return response
 
 # Add a new route to check CSRF token status
 @app.route('/check_csrf')
@@ -224,7 +224,7 @@ TAROT_CARDS: List[Dict[str, str]] = [
         {"image": "/static/img/a22.jpg", "name": "O Louco"},
     ]
 
-class TarotForm(Form):
+class TarotForm(FlaskForm):  # Inherit from FlaskForm
     intencao = StringField('Intenção')
     selectedCards = HiddenField('Selected Cards')
 
@@ -248,16 +248,13 @@ def process_form():
         intencao = form.intencao.data
         # Process 'intencao' and 'selected_cards' as needed
         # Redirect to 'cartas' after successful form submission
-        return jsonify({'redirect': url_for('cartas')})
+        return jsonify({'redirect': url_for('cartas')}) 
     return jsonify({'error': 'Form validation failed or CSRF tokens do not match.'}), 400
 
 
 @app.route('/cartas')
 def cartas():
-    try:
-        selected_cards = int(session.get('selected_cards', 0))
-    except (TypeError, ValueError):
-        return redirect(url_for('home'))
+    selected_cards = session.get('selected_cards', 0)
 
     shuffled_cards = random.sample(TAROT_CARDS, len(TAROT_CARDS))
     for card in shuffled_cards:
