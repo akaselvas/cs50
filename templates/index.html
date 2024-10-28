@@ -11,7 +11,6 @@
             deixe o campo em branco.</p>
     </div>
     <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
-        {{ form.csrf_token }}
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
@@ -33,12 +32,12 @@
         </div>
     </form>
 </div>
+
 <script nonce="{{ g.nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('tarotForm');
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
-        const csrfToken = document.querySelector('input[name="csrf_token"]').value; // Ensure this selects the correct token
         
         botoes.forEach(botao => {
             botao.addEventListener('click', () => {
@@ -55,10 +54,12 @@
     
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
+
             if (!selectedCardsInput.value) {
                 alert('Por favor, selecione o número de cartas antes de continuar.');
                 return;
             }
+
             const formData = new FormData(form);
             
             try {
@@ -66,12 +67,13 @@
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': csrfToken,
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                     credentials: 'same-origin'
                 });
+
                 const data = await response.json();
+
                 if (response.ok) {
                     window.location.href = data.redirect;
                 } else {
@@ -87,8 +89,5 @@
             }
         });
     });
-
-
-
 </script>
 {% endblock %}
