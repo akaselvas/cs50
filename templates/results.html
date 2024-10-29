@@ -75,11 +75,13 @@
         if (parts.length === 2) return parts.pop().split(';').shift();
     }
 
+    const csrfToken = "{{ csrf_token }}"
+
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
         choosed_cards: {{ choosed_cards | tojson }},
-        csrf_token: getCookie('csrf_token')
+        csrf_token: csrfToken // Use the pre-rendered token
     });
 
     socket.on('generation_error', function (data) {
@@ -203,5 +205,35 @@
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+
+    const maxRetries = 5;
+    let retryCount = 0;
+    let reconnectTimeout = null; // Store the timeout ID
+
+    socket.on('connect_error', (error) => {
+        retryCount++;
+        if (retryCount < maxRetries) {
+            console.warn(`Connection error (${retryCount}/${maxRetries}): ${error}. Reconnecting...`);
+            const reconnectDelay = 5000 * retryCount; // Exponential backoff
+            reconnectTimeout = setTimeout(() => {
+                socket.connect();
+            }, reconnectDelay);
+        } else {
+            clearTimeout(reconnectTimeout); // Clear any pending reconnect attempts
+            console.error(`Connection failed after multiple retries. Please reload.`);
+            alert("Connection to the server failed. Please reload the page.");
+            retryCount = 0; // Reset retry count for future attempts if the user chooses not to reload immediately
+        }
+    });
+
+    socket.on('disconnect', (reason) => {
+        if (reason === 'io server disconnect') {
+            // If the server disconnects intentionally, attempt a manual reconnect.
+            socket.connect();
+        }
+        // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
+    });
+    
+
 </script>
 {% endblock %}
