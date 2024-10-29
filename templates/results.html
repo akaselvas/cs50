@@ -51,7 +51,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => { 
 
-    const csrfToken = document.getElementById('csrf_token').value; // Declare csrfToken ONCE
+    const csrfTokenValue = document.getElementById('csrf_token').value; // Changed variable name!
 
     function getCookie(name) {
         const value = `; ${document.cookie}`;
@@ -60,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const socket = io({
-        extraHeaders: {  // Send token in a header
-            'X-CSRFToken': csrfToken
+        extraHeaders: {  
+            'X-CSRFToken': csrfTokenValue  // Use the new variable name
         }
     });
     const contentWrapper = document.getElementById('content-wrapper');
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
         choosed_cards: {{ choosed_cards | tojson }},
-        csrf_token: csrfToken 
+        csrf_token: csrfTokenValue 
     });
 
     socket.on('generation_error', function (data) {
