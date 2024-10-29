@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="insideResult">
-    <input type="hidden" id="csrf_token" name="csrf_token" value="{{ csrf_token }}"> 
+    <input type="hidden" id="csrf_token" name="csrf_token" value="{{ csrf_token() }}">
     
     <div id="content-wrapper" class="content-wrapper">
         <div class="txt-resultado">
@@ -51,7 +51,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => { 
 
-    const csrfTokenValue = document.getElementById('csrf_token').value; // Changed variable name!
+    const csrfTokenValue = document.getElementById('csrf_token').value;
 
     function getCookie(name) {
         const value = `; ${document.cookie}`;
@@ -60,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const socket = io({
-        extraHeaders: {  
-            'X-CSRFToken': csrfTokenValue  // Use the new variable name
+        extraHeaders: {
+            'X-CSRFToken': csrfTokenValue 
         }
     });
     const contentWrapper = document.getElementById('content-wrapper');
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
         choosed_cards: {{ choosed_cards | tojson }},
-        csrf_token: csrfTokenValue 
+        // csrf_token: csrfTokenValue 
     });
 
     socket.on('generation_error', function (data) {
