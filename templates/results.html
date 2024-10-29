@@ -54,7 +54,11 @@
         if (parts.length === 2) return parts.pop().split(';').shift();
     }
 
-    const socket = io();
+    const socket = io({
+        extraHeaders: {  // Send token in a header
+            'X-CSRFToken': csrfToken
+        }
+    });
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
     const shadowOverlay = document.getElementById('shadow-overlay');
@@ -66,6 +70,8 @@
     const chatMessages = document.getElementById('chat-messages');
     const userInput = document.getElementById('user-input');
     const sendMessageButton = document.getElementById('send-message');
+    const csrfToken = document.getElementById('csrf_token').value;
+
     let tarotReading = '';
     let isFirstChatOpen = true;
 
@@ -87,7 +93,12 @@
     socket.on('generation_error', function (data) {
         console.error("CSRF Error:", data.message);
         // Handle the error appropriately, e.g., show a message to the user
-        alert("An error occurred. Please refresh the page.");
+        alert(data.message); // Display a specific error message
+    });
+
+    socket.on('message_error', (data) => {
+        console.error('Message Error:', data.message);
+        alert(data.message); // Display the error message
     });
 
     socket.on('generation_complete', function(data) {
@@ -211,18 +222,26 @@
     let reconnectTimeout = null; // Store the timeout ID
 
     socket.on('connect_error', (error) => {
+        console.error('Connection Error:', error);
+
+        if (error.message && error.message.includes('CSRF')) {
+            alert('CSRF token is invalid or missing. Please refresh the page.');
+            retryCount = 0; // Reset retry count in case of CSRF error
+            return; // Stop further reconnection attempts for CSRF errors
+        }
+
         retryCount++;
         if (retryCount < maxRetries) {
-            console.warn(`Connection error (${retryCount}/${maxRetries}): ${error}. Reconnecting...`);
-            const reconnectDelay = 5000 * retryCount; // Exponential backoff
+            console.warn(`Connection error (${retryCount}/${maxRetries}): ${error.message || error}. Reconnecting...`); // Use error.message if available
+            const reconnectDelay = 5000 * retryCount;
             reconnectTimeout = setTimeout(() => {
                 socket.connect();
             }, reconnectDelay);
         } else {
-            clearTimeout(reconnectTimeout); // Clear any pending reconnect attempts
-            console.error(`Connection failed after multiple retries. Please reload.`);
+            clearTimeout(reconnectTimeout);
+            console.error('Connection failed after multiple retries. Please reload the page.');
             alert("Connection to the server failed. Please reload the page.");
-            retryCount = 0; // Reset retry count for future attempts if the user chooses not to reload immediately
+            retryCount = 0;
         }
     });
 
