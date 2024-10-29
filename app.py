@@ -302,7 +302,7 @@ def results():
 
     print(f"Cartas escolhidas: {choosed_cards}")
 
-    return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards)
+    return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards, csrf_token=generate_csrf())
 
 # SocketIO event handlers
 # @socketio.on('start_generation')
@@ -314,9 +314,23 @@ def results():
 #     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
 #     emit('generation_complete', {'reading': reading_html})
 
+@socketio.on('connect')
+def handle_connect():
+    csrf_token = request.headers.get('X-CSRFToken')  # Get token from header
+    if not csrf_token:
+        return False  # Reject connection if token is missing
+
+    try:
+        validate_csrf(csrf_token)
+        return True  # Allow connection if token is valid
+    except ValidationError:
+        return False  # Reject connection if token is invalid
+
+
+
 @socketio.on('start_generation')
 def handle_generation(data):
-    csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
+    # csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
     
     if not csrf_token:
         emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
@@ -325,7 +339,8 @@ def handle_generation(data):
     try:
         validate_csrf(csrf_token) # Validate the token
     except ValidationError as e:  # Catch validation errors
-        emit('generation_error', {'message': str(e)}) # Emit an error event
+        logging.error(f"Error in generation: {e}")
+        emit('generation_error', {'message': 'An error occurred during generation. Please try again later.'})
         return
     
     intencao = data.get('intencao', '')
