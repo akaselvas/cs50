@@ -300,9 +300,11 @@ def results():
 
     logging.info(f"Choosed Cards Data: {selected_cards_data}")
 
-    print(f"Cartas escolhidas: {choosed_cards}")
-
-    return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards, csrf_token=generate_csrf())
+    return render_template('results.html', 
+                        intencao=intencao, 
+                        selected_cards=selected_cards, 
+                        choosed_cards=choosed_cards, 
+                        csrf_token=session.get('csrf_token', ''))
 
 # SocketIO event handlers
 # @socketio.on('start_generation')
@@ -316,40 +318,41 @@ def results():
 
 @socketio.on('connect')
 def handle_connect():
-    csrf_token = request.headers.get('X-CSRFToken')  # Get token from header
+    csrf_token = request.headers.get('X-CSRFToken')
     if not csrf_token:
-        return False  # Reject connection if token is missing
+        logging.warning("Socket connection attempt without CSRF token")  # Log the warning
+        return False
 
     try:
         validate_csrf(csrf_token)
-        return True  # Allow connection if token is valid
-    except ValidationError:
-        return False  # Reject connection if token is invalid
+        g.csrf_token = csrf_token  # Store in Flask's g object
+        logging.info("Socket connection authenticated with valid CSRF token")  # Log successful auth.
+        return True
+    except ValidationError as e:
+        logging.error(f"CSRF validation failed during socket connection: {e}") # Log the error
+        return False
 
 
 
 @socketio.on('start_generation')
 def handle_generation(data):
-    # csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
-    
-    if not csrf_token:
-        emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
-        return
-
-    try:
-        validate_csrf(csrf_token) # Validate the token
-    except ValidationError as e:  # Catch validation errors
-        logging.error(f"Error in generation: {e}")
-        emit('generation_error', {'message': 'An error occurred during generation. Please try again later.'})
+    if not hasattr(g, 'csrf_token'):
+        emit('generation_error', {'message': 'Unauthorized connection'})
         return
     
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+
+    try:
+        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+        emit('generation_complete', {'reading': reading_html})
+    except Exception as e:  # Handle any exceptions during reading generation
+        logging.error(f"Error in reading generation: {e}")  # Log the error
+        emit('generation_error', {'message': 'An error occurred during generation.'})
     
     print(f"CSRF Token: {csrf_token}")  # Now it will only print if csrf_token is defined
-    
     emit('generation_complete', {'reading': reading_html})
 
 
