@@ -85,7 +85,7 @@
 
         function initializeSocket() {  // New function
 
-            const socket = io({
+            socket = io({
                 extraHeaders: {
                     // 'X-CSRFToken': csrfTokenValue
                     'X-CSRFToken': document.getElementById('csrf_token').value
