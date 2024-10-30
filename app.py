@@ -342,9 +342,17 @@ def handle_connect():
 
 @socketio.on('start_generation')
 def handle_generation(data):
+
+    csrf_token = data.get('csrf_token')
+    logging.info(f"Received CSRF Token: {csrf_token}")
+
     if not hasattr(g, 'csrf_token'): # Check if g has the csrf_token attribute
         emit('generation_error', {'message': 'Unauthorized connection'})
         return  # Do not proceed
+    
+    if not csrf_token or csrf_token != session.get('csrf_token'):
+        emit('generation_error', {'message': 'Invalid or expired CSRF token'})
+        return
     
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
