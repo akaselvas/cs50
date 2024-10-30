@@ -83,86 +83,89 @@
         let retryCount = 0;
         let reconnectTimeout = null;
 
-        function initializeSocket() {  // New function
-
-            socket = io({
-                extraHeaders: {
-                    // 'X-CSRFToken': csrfTokenValue
-                    'X-CSRFToken': document.getElementById('csrf_token').value
-                }
-            });
-
-            socket.on('receive_message', (data) => {
-                removeLoadingIndicator();
-                addMessage('bot', data.message);
-            });
-
-            console.log('CSRF Token:', document.getElementById('csrf_token').value);
-
-            socket.on('connect', () => { // Emit start_generation AFTER successful connection
-                socket.emit('start_generation', {
-                    intencao: "{{ intencao }}",
-                    selected_cards: "{{ selected_cards }}",
-                    choosed_cards: {{ choosed_cards | tojson }},
-                    csrf_token: document.getElementById('csrf_token').value
-                });
-            });
-
-            socket.on('generation_complete', function (data) {
-                document.getElementById('loading-message').style.display = 'none';
-                resultArea.style.display = 'block';
-                document.getElementById('tarot-reading').innerHTML = data.reading;
-                tarotReading = data.reading;
-
-                setTimeout(checkContentOverflow, 40000);
-            });
-
-
-            socket.on('generation_error', function (data) {
-                console.error("CSRF Error:", data.message);
-                // Handle the error appropriately, e.g., show a message to the user
-                alert(data.message); // Display a specific error message
-            });
-
-            socket.on('message_error', (data) => {
-                console.error('Message Error:', data.message);
-                alert(data.message); // Display the error message
-            });
-
-
-            socket.on('connect_error', (error) => {
-                console.error('Connection Error:', error);
-                if (retryCount >= maxRetries) {
-                    clearTimeout(reconnectTimeout);
-                    alert("Connection to server failed after multiple retries. Please reload.");
-                    retryCount = 0;
-                    return;
-                }
-
-                if (error.message && error.message.includes('CSRF')) {
-                    alert("CSRF token mismatch or expired. Please reload the page.");
-                    retryCount = 0; // Reset retry count
-                    return; // Stop further reconnection attempts for CSRF errors.
-                }
-
-                retryCount++;
-                const delay = 2000 * retryCount; // Increased delay
-                console.log(`Reconnecting in ${delay / 1000} seconds...`);
-                reconnectTimeout = setTimeout(initializeSocket, delay); // Use initializeSocket for reconnect
-            });
-
-            socket.on('disconnect', (reason) => {
-                if (reason === 'io server disconnect') {
-                    // If the server disconnects intentionally, attempt a manual reconnect.
-                    socket.connect();
-                }
-                // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
-            });
-
-
-        }
         
-        initializeSocket();
+
+        socket = io({ extraHeaders: { 'X-CSRFToken': csrfTokenValue } }); 
+
+        socket.on('receive_message', (data) => {
+            removeLoadingIndicator();
+            addMessage('bot', data.message);
+        });
+
+        console.log('CSRF Token:', document.getElementById('csrf_token').value);
+
+        socket.on('connect', () => { // Emit start_generation AFTER successful connection
+            // socket.emit('start_generation', {
+            //     intencao: "{{ intencao }}",
+            //     selected_cards: "{{ selected_cards }}",
+            //     choosed_cards: {{ choosed_cards | tojson }},
+            //     csrf_token: csrfTokenValue
+            // });
+            console.log("Connected to the server."); 
+        });
+
+        socket.on('connection_success', () => {  // Listen for the custom event
+            console.log("Successfully connected with valid CSRF token.");
+
+            socket.emit('start_generation', { // Now it's safe to emit 'start_generation'
+                intencao: "{{ intencao }}",
+                selected_cards: "{{ selected_cards }}",
+                // choosed_cards: {{ choosed_cards | tojson }},
+                csrf_token: document.getElementById('csrf_token').value
+                });
+        });
+
+        socket.on('generation_complete', function (data) {
+            document.getElementById('loading-message').style.display = 'none';
+            resultArea.style.display = 'block';
+            document.getElementById('tarot-reading').innerHTML = data.reading;
+            tarotReading = data.reading;
+
+            setTimeout(checkContentOverflow, 40000);
+        });
+
+
+        socket.on('generation_error', function (data) {
+            console.error("CSRF Error:", data.message);
+            // Handle the error appropriately, e.g., show a message to the user
+            alert(data.message); // Display a specific error message
+        });
+
+        socket.on('message_error', (data) => {
+            console.error('Message Error:', data.message);
+            alert(data.message); // Display the error message
+        });
+
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection Error:', error);
+            if (retryCount >= maxRetries) {
+                clearTimeout(reconnectTimeout);
+                alert("Connection to server failed after multiple retries. Please reload.");
+                retryCount = 0;
+                return;
+            }
+
+            if (error.message && error.message.includes('CSRF')) {
+                alert("CSRF token mismatch or expired. Please reload the page.");
+                retryCount = 0; // Reset retry count
+                return; // Stop further reconnection attempts for CSRF errors.
+            }
+
+            retryCount++;
+            const delay = 2000 * retryCount; // Increased delay
+            console.log(`Reconnecting in ${delay / 1000} seconds...`);
+            reconnectTimeout = setTimeout(initializeSocket, delay); // Use initializeSocket for reconnect
+        });
+
+        socket.on('disconnect', (reason) => {
+            if (reason === 'io server disconnect') {
+                // If the server disconnects intentionally, attempt a manual reconnect.
+                socket.connect();
+            }
+            // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
+        });
+
 
         function checkContentOverflow() {
             if (resultArea.scrollHeight > contentWrapper.clientHeight) {
@@ -216,9 +219,11 @@
             chatOverlay.style.display = 'none';
         });
 
-        sendMessageButton.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+        sendMessageButton.addEventListener('click', () => {
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            socket.emit('send_message', { message: message, tarot_reading: tarotReading, csrf_token: csrfTokenValue });  // Include CSRF token
         });
 
         function sendMessage() {
