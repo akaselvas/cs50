@@ -87,7 +87,8 @@
 
             const socket = io({
                 extraHeaders: {
-                    'X-CSRFToken': csrfTokenValue
+                    // 'X-CSRFToken': csrfTokenValue
+                    'X-CSRFToken': document.getElementById('csrf_token').value
                 }
             });
 
@@ -96,11 +97,14 @@
                 addMessage('bot', data.message);
             });
 
+            console.log('CSRF Token:', document.getElementById('csrf_token').value);
+
             socket.on('connect', () => { // Emit start_generation AFTER successful connection
                 socket.emit('start_generation', {
                     intencao: "{{ intencao }}",
                     selected_cards: "{{ selected_cards }}",
-                    choosed_cards: {{ choosed_cards | tojson }}
+                    choosed_cards: {{ choosed_cards | tojson }},
+                    csrf_token: document.getElementById('csrf_token').value
                 });
             });
 

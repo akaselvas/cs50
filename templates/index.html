@@ -52,21 +52,21 @@
             });
         });
 
-        const updateCsrfToken = async () => {
-            try {
-                const response = await fetch('/get_csrf');
-                const data = await response.json();
-                document.getElementById('csrf_token').value = data.csrf_token;
-            } catch (error) {
-                console.error('Error fetching CSRF token:', error);
-                alert("Could not fetch security token.  Please reload the page."); // User-friendly message
-            }
-        };
+        // const updateCsrfToken = async () => {
+        //     try {
+        //         const response = await fetch('/get_csrf');
+        //         const data = await response.json();
+        //         document.getElementById('csrf_token').value = data.csrf_token;
+        //     } catch (error) {
+        //         console.error('Error fetching CSRF token:', error);
+        //         alert("Could not fetch security token.  Please reload the page."); // User-friendly message
+        //     }
+        // };
 
 
-        await updateCsrfToken(); // Await the token update
+        // await updateCsrfToken(); // Await the token update
 
-        form.addEventListener('submit', async function (e) {
+        form.addEventListener('submit', function (e) {
             e.preventDefault();
 
             if (!selectedCardsInput.value) {
