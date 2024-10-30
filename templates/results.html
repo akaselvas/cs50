@@ -3,7 +3,7 @@
 {% block content %}
 <div class="insideResult">
     <input type="hidden" id="csrf_token" name="csrf_token" value="{{ csrf_token() }}">
-    
+
     <div id="content-wrapper" class="content-wrapper">
         <div class="txt-resultado">
             <p id="loading-message">
@@ -49,48 +49,43 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => { 
+    document.addEventListener('DOMContentLoaded', () => {
 
-    const csrfTokenValue = document.getElementById('csrf_token').value;
 
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
+        const csrfTokenValue = document.getElementById('csrf_token').value;
 
-    const socket = io({
-        extraHeaders: {
-            'X-CSRFToken': csrfTokenValue 
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
         }
-    });
-    const contentWrapper = document.getElementById('content-wrapper');
-    const resultArea = document.getElementById('result-area');
-    const shadowOverlay = document.getElementById('shadow-overlay');
-    const scrollIndicator = document.getElementById('scroll-indicator');
-    const chatInterface = document.getElementById('chat-interface');
-    const chatOverlay = document.getElementById('chat-overlay');
-    const openChatButton = document.getElementById('open-chat');
-    const closeChatButton = document.getElementById('close-chat');
-    const chatMessages = document.getElementById('chat-messages');
-    const userInput = document.getElementById('user-input');
-    const sendMessageButton = document.getElementById('send-message');
-    
 
-    let tarotReading = '';
-    let isFirstChatOpen = true;
-
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
+        const socket = io({
+            extraHeaders: {
+                'X-CSRFToken': csrfTokenValue
+            }
+        });
+        const contentWrapper = document.getElementById('content-wrapper');
+        const resultArea = document.getElementById('result-area');
+        const shadowOverlay = document.getElementById('shadow-overlay');
+        const scrollIndicator = document.getElementById('scroll-indicator');
+        const chatInterface = document.getElementById('chat-interface');
+        const chatOverlay = document.getElementById('chat-overlay');
+        const openChatButton = document.getElementById('open-chat');
+        const closeChatButton = document.getElementById('close-chat');
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendMessageButton = document.getElementById('send-message');
 
 
-    socket.emit('start_generation', {
-        intencao: "{{ intencao }}",
-        selected_cards: "{{ selected_cards }}",
-        choosed_cards: {{ choosed_cards | tojson }},
+        let tarotReading = '';
+        let isFirstChatOpen = true;
+
+
+        socket.emit('start_generation', {
+            intencao: "{{ intencao }}",
+            selected_cards: "{{ selected_cards }}",
+            choosed_cards: {{ choosed_cards | tojson }},
         // csrf_token: csrfTokenValue 
     });
 
@@ -105,12 +100,12 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(data.message); // Display the error message
     });
 
-    socket.on('generation_complete', function(data) {
+    socket.on('generation_complete', function (data) {
         document.getElementById('loading-message').style.display = 'none';
         resultArea.style.display = 'block';
         document.getElementById('tarot-reading').innerHTML = data.reading;
         tarotReading = data.reading;
-        
+
         setTimeout(checkContentOverflow, 40000);
     });
 
@@ -141,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return scrollTop + clientHeight >= scrollHeight - tolerance;
     }
 
-    contentWrapper.addEventListener('scroll', function() {
+    contentWrapper.addEventListener('scroll', function () {
         if (isAtBottom()) {
             hideScrollIndicators();
         } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
@@ -154,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     openChatButton.addEventListener('click', () => {
         chatInterface.style.display = 'flex';
         chatOverlay.style.display = 'block';
-        
+
         if (isFirstChatOpen) {
             addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
             isFirstChatOpen = false;
@@ -210,12 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(sender, content) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
-        
+
         // Parse markdown for bot messages
         if (sender === 'bot') {
             content = marked.parse(content);
         }
-        
+
         messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
