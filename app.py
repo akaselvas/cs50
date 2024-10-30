@@ -19,7 +19,7 @@ from flask_limiter.util import get_remote_address
 from flask_session import Session
 from flask_socketio import SocketIO, emit
 from flask_talisman import Talisman
-from flask_wtf import csrf
+
 from flask_wtf import FlaskForm
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf.csrf import CSRFError
@@ -306,7 +306,7 @@ def results():
                         intencao=intencao, 
                         selected_cards=selected_cards, 
                         choosed_cards=choosed_cards, 
-                        csrf_token=csrf.generate_csrf)
+                        csrf_token=generate_csrf)
 
 # SocketIO event handlers
 # @socketio.on('start_generation')
