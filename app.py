@@ -328,6 +328,10 @@ def handle_connect():
 
         if csrf_token != session.get('csrf_token'):  # Compare with session token
             raise ValidationError("CSRF token mismatch")
+        
+        if not csrf_token or csrf_token != session.get('csrf_token'):
+            emit('generation_error', {'message': 'Invalid CSRF token'})
+            return False
 
         g.csrf_token = csrf_token  # Still store for consistency (optional)
         logging.info("Socket connection authenticated with valid CSRF token")
