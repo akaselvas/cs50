@@ -13,7 +13,7 @@ import threading
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (Flask, flash, redirect, render_template, request,
-                   session, url_for, g, jsonify)
+                   session, url_for, g, jsonify, make_response)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -49,7 +49,7 @@ app.config.update(
     SESSION_TYPE='redis',
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
-    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',  # Changed from 'Lax' to 'Strict'
     SESSION_COOKIE_NAME='session',
@@ -146,12 +146,11 @@ def handle_csrf_error(e):
         return redirect(url_for('home'))
     
     
-@app.before_request
+@app.before_request  # Generate CSRF token if not present
 def before_request():
     g.nonce = secrets.token_hex(16)
     if 'csrf_token' not in session:
         session['csrf_token'] = generate_csrf()
-        logging.info(f"Generated new CSRF token: {session['csrf_token']}")
 
 
 # @app.after_request
@@ -296,6 +295,8 @@ def results():
     selected_cards = session.get('selected_cards', '')
     selected_cards_data = request.form.get('selected_cards_data')
 
+    session['csrf_token'] = generate_csrf() 
+
     try:
         choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
     except json.JSONDecodeError:
@@ -303,11 +304,19 @@ def results():
 
     logging.info(f"Choosed Cards Data: {selected_cards_data}")
 
-    return render_template('results.html', 
-                        intencao=intencao, 
-                        selected_cards=selected_cards, 
-                        choosed_cards=choosed_cards, 
-                        csrf_token=session.get('csrf_token')) # Get from session
+    response = make_response(render_template(
+        'results.html', 
+        intencao=intencao, 
+        selected_cards=selected_cards, 
+        choosed_cards=choosed_cards,
+        csrf_token=session['csrf_token'] # Pass to template for hidden field as well
+    ))
+    
+    response.set_cookie('csrf_token', session['csrf_token'],
+                        samesite='Strict', httponly=True, secure=app.config.get("SESSION_COOKIE_SECURE", True))  # Use secure=True IF AND ONLY IF you are using HTTPS.  Otherwise, keep it False.
+
+    return response
+
 
 # SocketIO event handlers
 # @socketio.on('start_generation')
@@ -321,6 +330,15 @@ def results():
 
 @socketio.on('connect')
 def handle_connect():
+    csrf_token = request.headers.get('X-CSRFToken')
+    if not csrf_token or csrf_token != session.get('csrf_token'):
+        emit('generation_error', {'message': 'Invalid CSRF token'})
+        logging.warning("Socket.IO connection rejected due to invalid CSRF token.")
+        return False  # Reject the connection
+
+    logging.info("Socket.IO connection established with valid CSRF token.")
+    emit('connection_success') # Signal to the client that the connection is ready
+    
     try:
         csrf_token = request.headers.get('X-CSRFToken')
         if not csrf_token:
@@ -333,7 +351,7 @@ def handle_connect():
             emit('generation_error', {'message': 'Invalid CSRF token'})
             return False
 
-        g.csrf_token = csrf_token  # Still store for consistency (optional)
+        # g.csrf_token = csrf_token  # Still store for consistency (optional)
         logging.info("Socket connection authenticated with valid CSRF token")
         return True
     except ValidationError as e:
@@ -347,7 +365,7 @@ def handle_connect():
 @socketio.on('start_generation')
 def handle_generation(data):
 
-    csrf_token = data.get('csrf_token')
+    csrf_token = data.get('csrf_token') 
     logging.info(f"Received CSRF Token: {csrf_token}")
 
     if not hasattr(g, 'csrf_token'): # Check if g has the csrf_token attribute
