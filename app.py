@@ -150,7 +150,8 @@ def handle_csrf_error(e):
 def before_request():
     g.nonce = secrets.token_hex(16)
     if 'csrf_token' not in session:
-        session['csrf_token'] = generate_csrf() 
+        session['csrf_token'] = generate_csrf()
+        logging.info(f"Generated new CSRF token: {session['csrf_token']}")
 
 
 # @app.after_request
