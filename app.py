@@ -321,19 +321,23 @@ def results():
 
 @socketio.on('connect')
 def handle_connect():
-    csrf_token = request.headers.get('X-CSRFToken')
-    if not csrf_token:
-        logging.warning("Socket connection attempt without CSRF token")
-        return False  # Reject the connection
-
     try:
-        validate_csrf(csrf_token)  # Validate the token
-        g.csrf_token = csrf_token  # Store in Flask's g object
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token:
+            raise ValidationError("Missing CSRF token")
+
+        if csrf_token != session.get('csrf_token'):  # Compare with session token
+            raise ValidationError("CSRF token mismatch")
+
+        g.csrf_token = csrf_token  # Still store for consistency (optional)
         logging.info("Socket connection authenticated with valid CSRF token")
-        return True # Accept connection
+        return True
     except ValidationError as e:
         logging.error(f"CSRF validation failed during socket connection: {e}")
-        return False # Reject the connection
+        return False  # Explicitly reject
+    except Exception as e:  # Catch any other potential errors
+        logging.error(f"Error during socket connection: {e}")
+        return False
 
 
 @socketio.on('start_generation')
