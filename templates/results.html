@@ -53,11 +53,10 @@
 
 
         const csrfTokenValue = document.getElementById('csrf_token').value;
-
-        function getCookie(name) {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; ${name}=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
+        if (!csrfTokenValue) {  // Check if the CSRF token is actually present
+            console.error("CSRF token is missing.  Cannot connect.");
+            alert("An error occurred (missing security token).  Please reload the page.");
+            return; // Stop execution to prevent further errors
         }
 
         const socket = io({
@@ -65,6 +64,13 @@
                 'X-CSRFToken': csrfTokenValue
             }
         });
+
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
         const contentWrapper = document.getElementById('content-wrapper');
         const resultArea = document.getElementById('result-area');
         const shadowOverlay = document.getElementById('shadow-overlay');
@@ -81,177 +87,177 @@
         let tarotReading = '';
         let isFirstChatOpen = true;
 
+        socket.on('connect', () => { // Emit start_generation AFTER successful connection
+            socket.emit('start_generation', {
+                intencao: "{{ intencao }}",
+                selected_cards: "{{ selected_cards }}",
+                choosed_cards: {{ choosed_cards | tojson }}
+            });
+        });
 
-        socket.emit('start_generation', {
-            intencao: "{{ intencao }}",
-            selected_cards: "{{ selected_cards }}",
-            choosed_cards: {{ choosed_cards | tojson }},
-        // csrf_token: csrfTokenValue 
-    });
+        socket.on('generation_error', function (data) {
+            console.error("CSRF Error:", data.message);
+            // Handle the error appropriately, e.g., show a message to the user
+            alert(data.message); // Display a specific error message
+        });
 
-    socket.on('generation_error', function (data) {
-        console.error("CSRF Error:", data.message);
-        // Handle the error appropriately, e.g., show a message to the user
-        alert(data.message); // Display a specific error message
-    });
+        socket.on('message_error', (data) => {
+            console.error('Message Error:', data.message);
+            alert(data.message); // Display the error message
+        });
 
-    socket.on('message_error', (data) => {
-        console.error('Message Error:', data.message);
-        alert(data.message); // Display the error message
-    });
+        socket.on('generation_complete', function (data) {
+            document.getElementById('loading-message').style.display = 'none';
+            resultArea.style.display = 'block';
+            document.getElementById('tarot-reading').innerHTML = data.reading;
+            tarotReading = data.reading;
 
-    socket.on('generation_complete', function (data) {
-        document.getElementById('loading-message').style.display = 'none';
-        resultArea.style.display = 'block';
-        document.getElementById('tarot-reading').innerHTML = data.reading;
-        tarotReading = data.reading;
+            setTimeout(checkContentOverflow, 40000);
+        });
 
-        setTimeout(checkContentOverflow, 40000);
-    });
-
-    function checkContentOverflow() {
-        if (resultArea.scrollHeight > contentWrapper.clientHeight) {
-            showScrollIndicators();
-        } else {
-            hideScrollIndicators();
-        }
-    }
-
-    function showScrollIndicators() {
-        shadowOverlay.style.display = 'block';
-        scrollIndicator.style.display = 'block';
-    }
-
-    function hideScrollIndicators() {
-        shadowOverlay.style.display = 'none';
-        scrollIndicator.style.display = 'none';
-    }
-
-    function isAtBottom() {
-        const scrollTop = contentWrapper.scrollTop;
-        const scrollHeight = contentWrapper.scrollHeight;
-        const clientHeight = contentWrapper.clientHeight;
-        const tolerance = 5; // pixels of tolerance
-
-        return scrollTop + clientHeight >= scrollHeight - tolerance;
-    }
-
-    contentWrapper.addEventListener('scroll', function () {
-        if (isAtBottom()) {
-            hideScrollIndicators();
-        } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
-            showScrollIndicators();
-        }
-    });
-
-    window.addEventListener('resize', checkContentOverflow);
-
-    openChatButton.addEventListener('click', () => {
-        chatInterface.style.display = 'flex';
-        chatOverlay.style.display = 'block';
-
-        if (isFirstChatOpen) {
-            addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
-            isFirstChatOpen = false;
-        }
-    });
-
-    closeChatButton.addEventListener('click', () => {
-        chatInterface.style.display = 'none';
-        chatOverlay.style.display = 'none';
-    });
-
-    sendMessageButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
-
-    function sendMessage() {
-        const message = userInput.value.trim();
-        if (message) {
-            addMessage('user', message);
-            showLoadingIndicator();
-            socket.emit('send_message', { message: message, tarot_reading: tarotReading });
-            userInput.value = '';
-        }
-    }
-
-    socket.on('receive_message', (data) => {
-        removeLoadingIndicator();
-        addMessage('bot', data.message);
-    });
-
-    function showLoadingIndicator() {
-        const loadingDiv = document.createElement('div');
-        loadingDiv.classList.add('chat-message', 'bot-message');
-        loadingDiv.innerHTML = `
-            <div class="chat-message-content">
-                <span class="loading-dots">
-                    .<span>.</span><span>.</span><span>.</span>
-                </span>
-            </div>
-        `;
-        chatMessages.appendChild(loadingDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function removeLoadingIndicator() {
-        const loadingIndicator = chatMessages.querySelector('.chat-message:last-child');
-        if (loadingIndicator && loadingIndicator.querySelector('.loading-dots')) {
-            loadingIndicator.remove();
-        }
-    }
-
-    function addMessage(sender, content) {
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
-
-        // Parse markdown for bot messages
-        if (sender === 'bot') {
-            content = marked.parse(content);
+        function checkContentOverflow() {
+            if (resultArea.scrollHeight > contentWrapper.clientHeight) {
+                showScrollIndicators();
+            } else {
+                hideScrollIndicators();
+            }
         }
 
-        messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    const maxRetries = 5;
-    let retryCount = 0;
-    let reconnectTimeout = null; // Store the timeout ID
-
-    socket.on('connect_error', (error) => {
-        console.error('Connection Error:', error);
-
-        if (error.message && error.message.includes('CSRF')) {
-            alert('CSRF token is invalid or missing. Please refresh the page.');
-            retryCount = 0; // Reset retry count in case of CSRF error
-            return; // Stop further reconnection attempts for CSRF errors
+        function showScrollIndicators() {
+            shadowOverlay.style.display = 'block';
+            scrollIndicator.style.display = 'block';
         }
 
-        retryCount++;
-        if (retryCount < maxRetries) {
-            console.warn(`Connection error (${retryCount}/${maxRetries}): ${error.message || error}. Reconnecting...`); // Use error.message if available
-            const reconnectDelay = 5000 * retryCount;
-            reconnectTimeout = setTimeout(() => {
+        function hideScrollIndicators() {
+            shadowOverlay.style.display = 'none';
+            scrollIndicator.style.display = 'none';
+        }
+
+        function isAtBottom() {
+            const scrollTop = contentWrapper.scrollTop;
+            const scrollHeight = contentWrapper.scrollHeight;
+            const clientHeight = contentWrapper.clientHeight;
+            const tolerance = 5; // pixels of tolerance
+
+            return scrollTop + clientHeight >= scrollHeight - tolerance;
+        }
+
+        contentWrapper.addEventListener('scroll', function () {
+            if (isAtBottom()) {
+                hideScrollIndicators();
+            } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
+                showScrollIndicators();
+            }
+        });
+
+        window.addEventListener('resize', checkContentOverflow);
+
+        openChatButton.addEventListener('click', () => {
+            chatInterface.style.display = 'flex';
+            chatOverlay.style.display = 'block';
+
+            if (isFirstChatOpen) {
+                addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
+                isFirstChatOpen = false;
+            }
+        });
+
+        closeChatButton.addEventListener('click', () => {
+            chatInterface.style.display = 'none';
+            chatOverlay.style.display = 'none';
+        });
+
+        sendMessageButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (message) {
+                addMessage('user', message);
+                showLoadingIndicator();
+                socket.emit('send_message', { message: message, tarot_reading: tarotReading });
+                userInput.value = '';
+            }
+        }
+
+        socket.on('receive_message', (data) => {
+            removeLoadingIndicator();
+            addMessage('bot', data.message);
+        });
+
+        function showLoadingIndicator() {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.classList.add('chat-message', 'bot-message');
+            loadingDiv.innerHTML = `
+                <div class="chat-message-content">
+                    <span class="loading-dots">
+                        .<span>.</span><span>.</span><span>.</span>
+                    </span>
+                </div>
+            `;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLoadingIndicator() {
+            const loadingIndicator = chatMessages.querySelector('.chat-message:last-child');
+            if (loadingIndicator && loadingIndicator.querySelector('.loading-dots')) {
+                loadingIndicator.remove();
+            }
+        }
+
+        function addMessage(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
+
+            // Parse markdown for bot messages
+            if (sender === 'bot') {
+                content = marked.parse(content);
+            }
+
+            messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        const maxRetries = 5;
+        let retryCount = 0;
+        let reconnectTimeout = null; // Store the timeout ID
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection Error:', error);
+
+            if (error.message && error.message.includes('CSRF')) {
+                alert('CSRF token is invalid or missing. Please refresh the page.');
+                retryCount = 0; // Reset retry count in case of CSRF error
+                return; // Stop further reconnection attempts for CSRF errors
+            }
+
+            retryCount++;
+            if (retryCount < maxRetries) {
+                console.warn(`Connection error (${retryCount}/${maxRetries}): ${error.message || error}. Reconnecting...`); // Use error.message if available
+                const reconnectDelay = 5000 * retryCount;
+                reconnectTimeout = setTimeout(() => {
+                    socket.connect();
+                }, reconnectDelay);
+            } else {
+                clearTimeout(reconnectTimeout);
+                console.error('Connection failed after multiple retries. Please reload the page.');
+                alert("Connection to the server failed. Please reload the page.");
+                retryCount = 0;
+            }
+        });
+
+        socket.on('disconnect', (reason) => {
+            if (reason === 'io server disconnect') {
+                // If the server disconnects intentionally, attempt a manual reconnect.
                 socket.connect();
-            }, reconnectDelay);
-        } else {
-            clearTimeout(reconnectTimeout);
-            console.error('Connection failed after multiple retries. Please reload the page.');
-            alert("Connection to the server failed. Please reload the page.");
-            retryCount = 0;
-        }
+            }
+            // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
+        });
+        
     });
-
-    socket.on('disconnect', (reason) => {
-        if (reason === 'io server disconnect') {
-            // If the server disconnects intentionally, attempt a manual reconnect.
-            socket.connect();
-        }
-        // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
-    });
-    
-});
 </script>
 {% endblock %}
