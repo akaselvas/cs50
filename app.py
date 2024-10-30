@@ -307,7 +307,7 @@ def results():
                         intencao=intencao, 
                         selected_cards=selected_cards, 
                         choosed_cards=choosed_cards, 
-                        csrf_token=generate_csrf)
+                        csrf_token=session.get('csrf_token')) # Get from session
 
 # SocketIO event handlers
 # @socketio.on('start_generation')
@@ -333,8 +333,8 @@ def handle_connect():
         logging.info("Socket connection authenticated with valid CSRF token")
         return True
     except ValidationError as e:
-        logging.error(f"CSRF validation failed during socket connection: {e}")
-        return False  # Explicitly reject
+        logging.error(f"CSRF validation failed during socket connection: {e}")  # Log the *specific* error message
+        return False
     except Exception as e:  # Catch any other potential errors
         logging.error(f"Error during socket connection: {e}")
         return False
