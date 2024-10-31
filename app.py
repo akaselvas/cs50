@@ -395,6 +395,7 @@ def handle_generation(data):
 
 @socketio.on('send_message')
 def handle_message(data: Dict[str, str]):
+    csrf_token = data.get('csrf_token')
     message = sanitize_input(data['message'])
     tarot_reading = data.get('tarot_reading', '')
 
