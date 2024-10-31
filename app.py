@@ -26,19 +26,13 @@ from flask_wtf.csrf import CSRFError
 from flask_wtf.csrf import generate_csrf
 from flask_wtf.csrf import validate_csrf
 
-
 from wtforms.validators import ValidationError  # You need this import for handling CSRF errors
-
-
 from markupsafe import Markup
-
-
 
 # Load environment variables
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
@@ -81,7 +75,6 @@ limiter = Limiter(
     default_limits=["400 per day", "100 per hour"]
 )
 
-
 csp={
     'default-src': "'self'",
     'style-src': [
@@ -117,8 +110,6 @@ csp={
 Talisman(app, content_security_policy=csp)
 
 
-
-
 def sanitize_input(text: str) -> str:
     """Sanitizes user input to prevent XSS attacks."""
     allowed_tags = ['a', 'b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'li', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code'] # Example allowed tags – adjust as needed
@@ -129,7 +120,6 @@ def sanitize_input(text: str) -> str:
 # Utility functions
 def markdown_to_html(text: str) -> Markup:
     return Markup(markdown.markdown(text, extensions=['fenced_code', 'codehilite']))
-
 
 # CSRF error handler
 @app.errorhandler(CSRFError)
@@ -145,13 +135,11 @@ def handle_csrf_error(e):
         flash('Security token has expired. Please try again.', 'error')
         return redirect(url_for('home'))
     
-    
 @app.before_request  # Generate CSRF token if not present
 def before_request():
     g.nonce = secrets.token_hex(16)
     if 'csrf_token' not in session:
         session['csrf_token'] = generate_csrf()
-
 
 # @app.after_request
 # def refresh_csrf(response):
@@ -196,8 +184,6 @@ model = genai.GenerativeModel(
     model_name="gemini-1.5-pro-002",
     generation_config=generation_config
 )
-
-
 
 # Cache for tarot cards
 TAROT_CARDS: List[Dict[str, str]] = [
