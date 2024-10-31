@@ -328,6 +328,13 @@ def results():
 #     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
 #     emit('generation_complete', {'reading': reading_html})
 
+def _validate_csrf_token(data):
+        csrf_token = data.get('csrf_token')
+
+        if not csrf_token or csrf_token != session.get('csrf_token'):
+            emit('generation_error', {'message': 'Invalid CSRF token'})
+            return # Return early to stop execution
+
 @socketio.on('connect')
 def handle_connect():
     csrf_token = request.headers.get('X-CSRFToken')
@@ -365,7 +372,7 @@ def handle_connect():
 @socketio.on('start_generation')
 def handle_generation(data):
 
-    csrf_token = data.get('csrf_token') 
+    _validate_csrf_token(data) 
     logging.info(f"Received CSRF Token: {csrf_token}")
 
     if not hasattr(g, 'csrf_token'): # Check if g has the csrf_token attribute
@@ -395,7 +402,7 @@ def handle_generation(data):
 
 @socketio.on('send_message')
 def handle_message(data: Dict[str, str]):
-    csrf_token = data.get('csrf_token')
+    _validate_csrf_token(data)
     message = sanitize_input(data['message'])
     tarot_reading = data.get('tarot_reading', '')
 
