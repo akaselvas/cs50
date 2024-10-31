@@ -110,8 +110,9 @@
             socket.emit('start_generation', { // Now it's safe to emit 'start_generation'
                 intencao: "{{ intencao }}",
                 selected_cards: "{{ selected_cards }}",
-                // choosed_cards: {{ choosed_cards | tojson }},
-                csrf_token: document.getElementById('csrf_token').value
+                // choosed_cards: {{ choosed_cards | tojson }}
+                csrf_token: csrfTokenValue 
+                // csrf_token: document.getElementById('csrf_token').value
                 });
         });
 
@@ -231,7 +232,10 @@
             if (message) {
                 addMessage('user', message);
                 showLoadingIndicator();
-                socket.emit('send_message', { message: message, tarot_reading: tarotReading });
+                socket.emit('send_message', { message: message, 
+                    tarot_reading: tarotReading,
+                    csrf_token: csrfTokenValue 
+                });
                 userInput.value = '';
             }
         }
