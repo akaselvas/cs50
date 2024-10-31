@@ -85,7 +85,7 @@
 
         
 
-        socket = io({ extraHeaders: { 'X-CSRFToken': csrfTokenValue } }); 
+        socket = io({ extraHeaders: { 'X-CSRFToken': csrfTokenValue } });
 
         socket.on('receive_message', (data) => {
             removeLoadingIndicator();
@@ -110,8 +110,8 @@
             socket.emit('start_generation', { // Now it's safe to emit 'start_generation'
                 intencao: "{{ intencao }}",
                 selected_cards: "{{ selected_cards }}",
-                // choosed_cards: {{ choosed_cards | tojson }}
-                csrf_token: csrfTokenValue 
+                choosed_cards: {{ choosed_cards | tojson }},
+                csrf_token: csrfTokenValue
                 // csrf_token: document.getElementById('csrf_token').value
                 });
         });
@@ -210,6 +210,7 @@
             chatOverlay.style.display = 'block';
 
             if (isFirstChatOpen) {
+                socket.emit('open_chat', { csrf_token: csrfTokenValue });
                 addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
                 isFirstChatOpen = false;
             }
@@ -224,7 +225,7 @@
             userInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
-            socket.emit('send_message', { message: message, tarot_reading: tarotReading, csrf_token: csrfTokenValue });  // Include CSRF token
+            // socket.emit('send_message', { message: message, tarot_reading: tarotReading, csrf_token: csrfTokenValue });  // Include CSRF token
         });
 
         function sendMessage() {
@@ -232,7 +233,8 @@
             if (message) {
                 addMessage('user', message);
                 showLoadingIndicator();
-                socket.emit('send_message', { message: message, 
+                socket.emit('send_message', { 
+                    message: message, 
                     tarot_reading: tarotReading,
                     csrf_token: csrfTokenValue 
                 });
