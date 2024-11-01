@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import json
 import logging
 import os
@@ -30,9 +33,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 
 # Use the correct async_mode for gunicorn with gevent:
-async_mode = None
+# async_mode = None
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Make sure redis is configured for message passing
 if os.environ.get('REDIS_URL'):
@@ -112,6 +115,9 @@ csp={
 
 # Talisman(app)
 Talisman(app, content_security_policy=csp)
+
+def patch_gevent():
+    gevent.monkey.patch_all()
 
 
 def sanitize_input(text: str) -> str:
@@ -305,5 +311,5 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
-    # socketio.run(app, debug=True)
-    pass
+    patch_gevent()  # Patch *before* running the app
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # Or however you're starting

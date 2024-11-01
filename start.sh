@@ -4,4 +4,5 @@
 gevent monkey -v -p
 
 # Now run Gunicorn
-exec gunicorn -k gevent --worker-class socketio.sgunicorn.GeventSocketIOWorker --bind 0.0.0.0:$PORT "app:app"
+#exec gunicorn -k gevent --worker-class socketio.sgunicorn.GeventSocketIOWorker --bind 0.0.0.0:$PORT "app:app"
+gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 app:app
