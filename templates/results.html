@@ -2,7 +2,6 @@
 
 {% block content %}
 <div class="insideResult">
-
     <div id="content-wrapper" class="content-wrapper">
         <div class="txt-resultado">
             <p id="loading-message">
@@ -48,215 +47,161 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
 
-        function getCookie(name) {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; ${name}=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
-        }
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
 
-        const contentWrapper = document.getElementById('content-wrapper');
-        const resultArea = document.getElementById('result-area');
-        const shadowOverlay = document.getElementById('shadow-overlay');
-        const scrollIndicator = document.getElementById('scroll-indicator');
-        const chatInterface = document.getElementById('chat-interface');
-        const chatOverlay = document.getElementById('chat-overlay');
-        const openChatButton = document.getElementById('open-chat');
-        const closeChatButton = document.getElementById('close-chat');
-        const chatMessages = document.getElementById('chat-messages');
-        const userInput = document.getElementById('user-input');
-        const sendMessageButton = document.getElementById('send-message');
-        
-        let socket; // Declare socket outside to make it accessible in other functions
-        let tarotReading = '';
-        let isFirstChatOpen = true;
-        const maxRetries = 5;
-        let retryCount = 0;
-        let reconnectTimeout = null;
+    const socket = io();
+    const contentWrapper = document.getElementById('content-wrapper');
+    const resultArea = document.getElementById('result-area');
+    const shadowOverlay = document.getElementById('shadow-overlay');
+    const scrollIndicator = document.getElementById('scroll-indicator');
+    const chatInterface = document.getElementById('chat-interface');
+    const chatOverlay = document.getElementById('chat-overlay');
+    const openChatButton = document.getElementById('open-chat');
+    const closeChatButton = document.getElementById('close-chat');
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendMessageButton = document.getElementById('send-message');
+    let tarotReading = '';
+    let isFirstChatOpen = true;
 
-        
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
 
-        socket = io();
-
-        socket.on('receive_message', (data) => {
-            removeLoadingIndicator();
-            addMessage('bot', data.message);
-        });
-
-        
-
-        socket.on('connect', () => { // Emit start_generation AFTER successful connection
-            socket.emit('start_generation', {
-                intencao: "{{ intencao }}",
-                selected_cards: "{{ selected_cards }}",
-                choosed_cards: {{ choosed_cards | tojson }}
-            });
-            console.log("Connected to the server."); 
-        });
-
-        socket.on('connection_success', () => {  // Listen for the custom event
-            
-
-            socket.emit('start_generation', { // Now it's safe to emit 'start_generation'
-                intencao: "{{ intencao }}",
-                selected_cards: "{{ selected_cards }}",
-                choosed_cards: {{ choosed_cards | tojson }}
-                // csrf_token: document.getElementById('csrf_token').value
-                });
-        });
-
-        socket.on('generation_complete', function (data) {
-            document.getElementById('loading-message').style.display = 'none';
-            resultArea.style.display = 'block';
-            document.getElementById('tarot-reading').innerHTML = data.reading;
-            tarotReading = data.reading;
-
-            setTimeout(checkContentOverflow, 40000);
-        });
-
-
-       
-
-        socket.on('message_error', (data) => {
-            console.error('Message Error:', data.message);
-            alert(data.message); // Display the error message
-        });
-
-
-        socket.on('connect_error', (error) => {
-            console.error('Connection Error:', error);
-            if (retryCount >= maxRetries) {
-                clearTimeout(reconnectTimeout);
-                alert("Connection to server failed after multiple retries. Please reload.");
-                retryCount = 0;
-                return;
-            }
-
-            
-            retryCount++;
-            const delay = 2000 * retryCount; // Increased delay
-            console.log(`Reconnecting in ${delay / 1000} seconds...`);
-            reconnectTimeout = setTimeout(initializeSocket, delay); // Use initializeSocket for reconnect
-        });
-
-        socket.on('disconnect', (reason) => {
-            if (reason === 'io server disconnect') {
-                // If the server disconnects intentionally, attempt a manual reconnect.
-                socket.connect();
-            }
-            // Otherwise, the Socket.IO client will automatically attempt to reconnect, which is fine.
-        });
-
-
-        function checkContentOverflow() {
-            if (resultArea.scrollHeight > contentWrapper.clientHeight) {
-                showScrollIndicators();
-            } else {
-                hideScrollIndicators();
-            }
-        }
-
-        function showScrollIndicators() {
-            shadowOverlay.style.display = 'block';
-            scrollIndicator.style.display = 'block';
-        }
-
-        function hideScrollIndicators() {
-            shadowOverlay.style.display = 'none';
-            scrollIndicator.style.display = 'none';
-        }
-
-        function isAtBottom() {
-            const scrollTop = contentWrapper.scrollTop;
-            const scrollHeight = contentWrapper.scrollHeight;
-            const clientHeight = contentWrapper.clientHeight;
-            const tolerance = 5; // pixels of tolerance
-
-            return scrollTop + clientHeight >= scrollHeight - tolerance;
-        }
-
-        contentWrapper.addEventListener('scroll', function () {
-            if (isAtBottom()) {
-                hideScrollIndicators();
-            } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
-                showScrollIndicators();
-            }
-        });
-
-        window.addEventListener('resize', checkContentOverflow);
-
-        openChatButton.addEventListener('click', () => {
-            chatInterface.style.display = 'flex';
-            chatOverlay.style.display = 'block';
-
-            if (isFirstChatOpen) {
-                
-                addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
-                isFirstChatOpen = false;
-            }
-        });
-
-        closeChatButton.addEventListener('click', () => {
-            chatInterface.style.display = 'none';
-            chatOverlay.style.display = 'none';
-        });
-
-        sendMessageButton.addEventListener('click', () => {
-            userInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-            // socket.emit('send_message', { message: message, tarot_reading: tarotReading, csrf_token: csrfTokenValue });  // Include CSRF token
-        });
-
-        function sendMessage() {
-            const message = userInput.value.trim();
-            if (message) {
-                addMessage('user', message);
-                showLoadingIndicator();
-                socket.emit('send_message', { 
-                    message: message, 
-                    tarot_reading: tarotReading
-                });
-                userInput.value = '';
-            }
-        }
-
-        function showLoadingIndicator() {
-            const loadingDiv = document.createElement('div');
-            loadingDiv.classList.add('chat-message', 'bot-message');
-            loadingDiv.innerHTML = `
-                <div class="chat-message-content">
-                    <span class="loading-dots">
-                        .<span>.</span><span>.</span><span>.</span>
-                    </span>
-                </div>
-            `;
-            chatMessages.appendChild(loadingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function removeLoadingIndicator() {
-            const loadingIndicator = chatMessages.querySelector('.chat-message:last-child');
-            if (loadingIndicator && loadingIndicator.querySelector('.loading-dots')) {
-                loadingIndicator.remove();
-            }
-        }
-
-        function addMessage(sender, content) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
-
-            // Parse markdown for bot messages
-            if (sender === 'bot') {
-                content = marked.parse(content);
-            }
-
-            messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
+    socket.emit('start_generation', {
+        intencao: "{{ intencao }}",
+        selected_cards: "{{ selected_cards }}",
+        choosed_cards: {{ choosed_cards | tojson }},
+        csrf_token: getCookie('csrf_token')
     });
+
+    socket.on('generation_error', function (data) {
+        console.error("CSRF Error:", data.message);
+        // Handle the error appropriately, e.g., show a message to the user
+        alert("An error occurred. Please refresh the page.");
+    });
+
+    socket.on('generation_complete', function(data) {
+        document.getElementById('loading-message').style.display = 'none';
+        resultArea.style.display = 'block';
+        document.getElementById('tarot-reading').innerHTML = data.reading;
+        tarotReading = data.reading;
+        
+        setTimeout(checkContentOverflow, 40000);
+    });
+
+    function checkContentOverflow() {
+        if (resultArea.scrollHeight > contentWrapper.clientHeight) {
+            showScrollIndicators();
+        } else {
+            hideScrollIndicators();
+        }
+    }
+
+    function showScrollIndicators() {
+        shadowOverlay.style.display = 'block';
+        scrollIndicator.style.display = 'block';
+    }
+
+    function hideScrollIndicators() {
+        shadowOverlay.style.display = 'none';
+        scrollIndicator.style.display = 'none';
+    }
+
+    function isAtBottom() {
+        const scrollTop = contentWrapper.scrollTop;
+        const scrollHeight = contentWrapper.scrollHeight;
+        const clientHeight = contentWrapper.clientHeight;
+        const tolerance = 5; // pixels of tolerance
+
+        return scrollTop + clientHeight >= scrollHeight - tolerance;
+    }
+
+    contentWrapper.addEventListener('scroll', function() {
+        if (isAtBottom()) {
+            hideScrollIndicators();
+        } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
+            showScrollIndicators();
+        }
+    });
+
+    window.addEventListener('resize', checkContentOverflow);
+
+    openChatButton.addEventListener('click', () => {
+        chatInterface.style.display = 'flex';
+        chatOverlay.style.display = 'block';
+        
+        if (isFirstChatOpen) {
+            addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
+            isFirstChatOpen = false;
+        }
+    });
+
+    closeChatButton.addEventListener('click', () => {
+        chatInterface.style.display = 'none';
+        chatOverlay.style.display = 'none';
+    });
+
+    sendMessageButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    function sendMessage() {
+        const message = userInput.value.trim();
+        if (message) {
+            addMessage('user', message);
+            showLoadingIndicator();
+            socket.emit('send_message', { message: message, tarot_reading: tarotReading });
+            userInput.value = '';
+        }
+    }
+
+    socket.on('receive_message', (data) => {
+        removeLoadingIndicator();
+        addMessage('bot', data.message);
+    });
+
+    function showLoadingIndicator() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.classList.add('chat-message', 'bot-message');
+        loadingDiv.innerHTML = `
+            <div class="chat-message-content">
+                <span class="loading-dots">
+                    .<span>.</span><span>.</span><span>.</span>
+                </span>
+            </div>
+        `;
+        chatMessages.appendChild(loadingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeLoadingIndicator() {
+        const loadingIndicator = chatMessages.querySelector('.chat-message:last-child');
+        if (loadingIndicator && loadingIndicator.querySelector('.loading-dots')) {
+            loadingIndicator.remove();
+        }
+    }
+
+    function addMessage(sender, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
+        
+        // Parse markdown for bot messages
+        if (sender === 'bot') {
+            content = marked.parse(content);
+        }
+        
+        messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 </script>
 {% endblock %}
