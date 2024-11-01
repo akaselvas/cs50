@@ -1,5 +1,7 @@
 {% extends "layout.html" %}
 {% block content %}
+
+
 <div class="insideCards">
     <div class="flex-container">
         {% for card in cards_group1 %}
@@ -20,47 +22,58 @@
         {% endfor %}
     </div>
     <div class="container-botoes" style="display: none;">
-        <button type="button" class="botao-texto-grande" id="leituraButton">
+        <button type="submit" class="botao-texto-grande">
             vamos fazer a leitura
         </button>
     </div>
 </div>
-<script nonce="{{ g.nonce }}">
-document.addEventListener('DOMContentLoaded', function () {  
+<script>
+document.addEventListener('DOMContentLoaded', function () {
     const cards = document.querySelectorAll('.card');
     const containerBotoes = document.querySelector('.container-botoes');
     const leituraButton = document.querySelector('.botao-texto-grande');
     const selectedCardsCount = {{ selected_cards }};
-
     let clickedCards = 0;
     let selectedCardsData = [];
+    const animationDuration = 1000; // Declare outside the loop
+
     cards.forEach(card => {
         card.addEventListener('click', () => {
-            if (card.classList.contains('clicked') || clickedCards >= selectedCardsCount) {
+            if (card.classList.contains('clicked')) { // Check the individual card first
                 return;
             }
+
+            if (clickedCards >= selectedCardsCount) {  // THEN check the overall count
+                return; 
+            }
+
             const imageUrl = card.getAttribute('data-image');
             const cardName = card.getAttribute('data-name');
             const cardValue = card.getAttribute('data-value');
-            const animationDuration = 1000;
+
+
             card.style.transition = `transform ${animationDuration}ms ease`;
+
             if (cardValue === 'invertido') {
                 card.style.transform = "rotateX(180deg)";
             } else {
                 card.style.transform = "rotateY(180deg)";
             }
+
             setTimeout(() => {
-                card.style.backgroundImage = `url("${imageUrl}")`;
+                card.style.backgroundImage = `url(${imageUrl})`; // Set AFTER animation
                 card.classList.add('clicked');
                 clickedCards++;
                 selectedCardsData.push({ name: cardName, value: cardValue });
+
                 if (clickedCards === selectedCardsCount) {
                     containerBotoes.style.display = 'block';
                     disableUnselectedCards();
                 }
-            }, animationDuration / 3);
+            }, animationDuration / 2);  // Adjusted timing slightly
         });
     });
+
     function disableUnselectedCards() {
         cards.forEach(card => {
             if (!card.classList.contains('clicked')) {
@@ -68,23 +81,27 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // Add form submission handling
     leituraButton.addEventListener('click', function (e) {
-        e.preventDefault();
+        e.preventDefault(); // Prevent the default button behavior
+
+        // Create a form dynamically
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '{{ url_for("results") }}';
-        const dataInput = document.createElement('input');
-        dataInput.type = 'hidden';
-        dataInput.name = 'selected_cards_data';
-        dataInput.value = JSON.stringify(selectedCardsData);
-        form.appendChild(dataInput);
-        // CSRF Token: This is the crucial addition
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrf_token'; // Make sure the name matches your backend
-        csrfInput.value = '{{ csrf_token() }}'; // Use Jinja to get the token
-        form.appendChild(csrfInput);
+
+        // Create a hidden input for the selected cards data
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_cards_data';
+        input.value = JSON.stringify(selectedCardsData);
+
+        // Append the input to the form, and the form to the body
+        form.appendChild(input);
         document.body.appendChild(form);
+
+        // Submit the form
         form.submit();
     });
 });

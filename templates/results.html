@@ -2,7 +2,6 @@
 
 {% block content %}
 <div class="insideResult">
-    <input type="hidden" id="csrf_token" name="csrf_token" value="{{ csrf_token }}">
 
     <div id="content-wrapper" class="content-wrapper">
         <div class="txt-resultado">
@@ -51,13 +50,6 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
 
-        const csrfTokenValue = document.getElementById('csrf_token').value;
-        if (!csrfTokenValue) {  // Check if the CSRF token is actually present
-            console.error("CSRF token is missing.  Cannot connect.");
-            alert("An error occurred (missing security token).  Please reload the page.");
-            return; // Stop execution to prevent further errors
-        }
-
         function getCookie(name) {
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);
@@ -85,33 +77,31 @@
 
         
 
-        socket = io({ extraHeaders: { 'X-CSRFToken': csrfTokenValue } });
+        socket = io();
 
         socket.on('receive_message', (data) => {
             removeLoadingIndicator();
             addMessage('bot', data.message);
         });
 
-        console.log('CSRF Token:', document.getElementById('csrf_token').value);
+        
 
         socket.on('connect', () => { // Emit start_generation AFTER successful connection
-            // socket.emit('start_generation', {
-            //     intencao: "{{ intencao }}",
-            //     selected_cards: "{{ selected_cards }}",
-            //     choosed_cards: {{ choosed_cards | tojson }},
-            //     csrf_token: csrfTokenValue
-            // });
+            socket.emit('start_generation', {
+                intencao: "{{ intencao }}",
+                selected_cards: "{{ selected_cards }}",
+                choosed_cards: {{ choosed_cards | tojson }}
+            });
             console.log("Connected to the server."); 
         });
 
         socket.on('connection_success', () => {  // Listen for the custom event
-            console.log("Successfully connected with valid CSRF token.");
+            
 
             socket.emit('start_generation', { // Now it's safe to emit 'start_generation'
                 intencao: "{{ intencao }}",
                 selected_cards: "{{ selected_cards }}",
-                choosed_cards: {{ choosed_cards | tojson }},
-                csrf_token: csrfTokenValue
+                choosed_cards: {{ choosed_cards | tojson }}
                 // csrf_token: document.getElementById('csrf_token').value
                 });
         });
@@ -126,11 +116,7 @@
         });
 
 
-        socket.on('generation_error', function (data) {
-            console.error("CSRF Error:", data.message);
-            // Handle the error appropriately, e.g., show a message to the user
-            alert(data.message); // Display a specific error message
-        });
+       
 
         socket.on('message_error', (data) => {
             console.error('Message Error:', data.message);
@@ -147,12 +133,7 @@
                 return;
             }
 
-            if (error.message && error.message.includes('CSRF')) {
-                alert("CSRF token mismatch or expired. Please reload the page.");
-                retryCount = 0; // Reset retry count
-                return; // Stop further reconnection attempts for CSRF errors.
-            }
-
+            
             retryCount++;
             const delay = 2000 * retryCount; // Increased delay
             console.log(`Reconnecting in ${delay / 1000} seconds...`);
@@ -210,7 +191,7 @@
             chatOverlay.style.display = 'block';
 
             if (isFirstChatOpen) {
-                socket.emit('open_chat', { csrf_token: csrfTokenValue });
+                
                 addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
                 isFirstChatOpen = false;
             }
@@ -235,8 +216,7 @@
                 showLoadingIndicator();
                 socket.emit('send_message', { 
                     message: message, 
-                    tarot_reading: tarotReading,
-                    csrf_token: csrfTokenValue 
+                    tarot_reading: tarotReading
                 });
                 userInput.value = '';
             }

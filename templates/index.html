@@ -11,7 +11,6 @@
             deixe o campo em branco.</p>
     </div>
     <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
-        <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">  <!--- Add id here -->
         <div>
             <input type="text" id="intencao" class="chat-input" name="intencao"
                 placeholder="Escreva sua intenção aqui..." autocomplete="off">
@@ -51,20 +50,6 @@
                 selectedCardsInput.value = botao.dataset.value;
             });
         });
-
-        const updateCsrfToken = async () => {
-            try {
-                const response = await fetch('/get_csrf');
-                const data = await response.json();
-                document.getElementById('csrf_token').value = data.csrf_token;
-            } catch (error) {
-                console.error('Error fetching CSRF token:', error);
-                alert("Could not fetch security token.  Please reload the page."); // User-friendly message
-            }
-        };
-
-
-        await updateCsrfToken(); // Await the token update
 
         form.addEventListener('submit', async function (e) {
             e.preventDefault();
