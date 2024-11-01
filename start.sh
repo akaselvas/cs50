@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Monkey-patch before importing other modules that use sockets
-gevent monkey -v -p
+# Monkey-patch
+exec python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); import app" #  <-- **FIX APP IMPORT PATH HERE**
 
-# Now run Gunicorn
-#exec gunicorn -k gevent --worker-class socketio.sgunicorn.GeventSocketIOWorker --bind 0.0.0.0:$PORT "app:app"
-gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 app:app
+# Run gunicorn with error logging
+exec gunicorn -k gevent app:app -b 0.0.0.0:$PORT --error-logfile -  # <-- **FIX APP:APP IF NEEDED**

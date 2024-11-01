@@ -1,6 +1,3 @@
-from gevent import monkey
-monkey.patch_all()
-
 import json
 import logging
 import os
@@ -16,37 +13,33 @@ import threading
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (Flask, flash, redirect, render_template, request,
-                   session, url_for, g, jsonify, make_response)
+                   session, url_for, g, jsonify)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
 from flask_socketio import SocketIO, emit
 from flask_talisman import Talisman
 from flask_wtf import FlaskForm
+from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError
+from flask_wtf.csrf import generate_csrf
+from flask_wtf.csrf import validate_csrf
+
+from wtforms.validators import ValidationError  # You need this import for handling CSRF errors
+
+
 from markupsafe import Markup
+
+
 
 # Load environment variables
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 app = Flask(__name__)
-
-# Use the correct async_mode for gunicorn with gevent:
-# async_mode = None
-
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
-
-# Make sure redis is configured for message passing
-if os.environ.get('REDIS_URL'):
-    socketio = SocketIO(
-        app,
-        cors_allowed_origins="*",
-        async_mode=async_mode,
-        message_queue=os.environ.get('REDIS_URL'),
-        channel='socket.io'
-    )
-
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
 
 # Enhanced security configurations
 app.config.update(
@@ -54,12 +47,14 @@ app.config.update(
     SESSION_TYPE='redis',
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',  # Changed from 'Lax' to 'Strict'
     SESSION_COOKIE_NAME='session',
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+    WTF_CSRF_TIME_LIMIT=1800,
     WTF_CSRF_SSL_STRICT=False,
+    WTF_CSRF_ENABLED=True,
     WTF_CSRF_METHODS=['POST', 'PUT', 'PATCH', 'DELETE']  # Explicitly specify methods
 )
 
@@ -72,6 +67,8 @@ app.config['SESSION_REDIS'] = redis.from_url(redis_url)
 # Initialize Redis client
 redis_client = redis.Redis.from_url(redis_url)
 
+# Initialize extensions
+csrf = CSRFProtect(app)
 Session(app)
 limiter = Limiter(
     get_remote_address,
@@ -81,6 +78,7 @@ limiter = Limiter(
     strategy="fixed-window",
     default_limits=["400 per day", "100 per hour"]
 )
+
 
 csp={
     'default-src': "'self'",
@@ -116,8 +114,7 @@ csp={
 # Talisman(app)
 Talisman(app, content_security_policy=csp)
 
-def patch_gevent():
-    gevent.monkey.patch_all()
+
 
 
 def sanitize_input(text: str) -> str:
@@ -132,6 +129,53 @@ def markdown_to_html(text: str) -> Markup:
     return Markup(markdown.markdown(text, extensions=['fenced_code', 'codehilite']))
 
 
+# CSRF error handler
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # Handle AJAX requests
+        return jsonify({
+            'error': 'CSRF token validation failed. Please refresh the page.',
+            'success': False
+        }), 400
+    else:
+        # Handle regular form submissions
+        flash('Security token has expired. Please try again.', 'error')
+        return redirect(url_for('home'))
+    
+    
+@app.before_request
+def before_request():
+    g.nonce = secrets.token_hex(16)
+    if 'csrf_token' not in session:
+        session['csrf_token'] = generate_csrf()
+
+
+@app.after_request
+def refresh_csrf(response):
+    if 'text/html' in response.headers.get('Content-Type', ''):
+        # Set a specific expiration time
+        response.set_cookie(
+            'csrf_token',
+            generate_csrf(),
+            secure=False,
+            httponly=False,
+            samesite='Lax',  # Changed from 'Lax' to 'Strict'
+            max_age=1800,
+            domain=None,  # Explicitly set domain to None
+            path='/'      # Explicitly set path
+        )
+    return response
+
+# Add a new route to check CSRF token status
+@app.route('/check_csrf')
+def check_csrf():
+    csrf_token = session.get('csrf_token')
+    cookie_token = request.cookies.get('csrf_token')
+    return jsonify({
+        'session_token': bool(csrf_token),
+        'cookie_token': bool(cookie_token)
+    })
 
 # API key handling
 api_key = os.getenv("GENAI_API_KEY")
@@ -150,6 +194,8 @@ model = genai.GenerativeModel(
     model_name="gemini-1.5-pro-002",
     generation_config=generation_config
 )
+
+
 
 # Cache for tarot cards
 TAROT_CARDS: List[Dict[str, str]] = [
@@ -178,8 +224,8 @@ TAROT_CARDS: List[Dict[str, str]] = [
     ]
 
 class TarotForm(FlaskForm):
-    pass
-        
+    class Meta:
+        csrf = True 
 
 # Routes
 @app.route('/')
@@ -187,27 +233,33 @@ def home():
     form = TarotForm()  # Create a form instance
     return render_template('index.html', form=form)
 
+
+@app.route('/get_csrf')
+def get_csrf():
+    csrf_token = generate_csrf()
+    return jsonify({'csrf_token': csrf_token})
+
 @app.route('/process_form', methods=['POST'])
 def process_form():
-    try:
+    form = TarotForm()
+    
+    # Explicitly check CSRF token
+    if not form.csrf_token.validate(form):
+        return jsonify({'error': 'Invalid CSRF token'}), 400
+        
+    intencao = sanitize_input(request.form.get('intencao', '').strip())
+    selected_cards = request.form.get('selectedCards')
 
-        intencao = sanitize_input(request.form.get('intencao', '').strip())
-        selected_cards = request.form.get('selectedCards')
+    if not selected_cards or selected_cards not in ['1', '3', '5']:
+        return jsonify({'error': 'Invalid card selection'}), 400
 
-        if not selected_cards or selected_cards not in ['1', '3', '5']:
-            return jsonify({'error': 'Invalid card selection'}), 400
+    if len(intencao) > 400:
+        return jsonify({'error': 'Intention too long'}), 400
 
-        if len(intencao) > 400:
-            return jsonify({'error': 'Intention too long'}), 400
+    session['intencao'] = intencao
+    session['selected_cards'] = selected_cards
 
-        session['intencao'] = intencao
-        session['selected_cards'] = selected_cards
-
-        return jsonify({'redirect': url_for('cartas')})
-
-    except Exception as e: # Catch any other errors during form processing.
-        logging.error(f"Error in form processing: {str(e)}")  # Log the error for debugging
-        return jsonify({'error': 'An unexpected error occurred.'}), 500 # Give generic message to user, but specific info in the logs.
+    return jsonify({'redirect': url_for('cartas')})
 
 
 @app.route('/cartas')
@@ -244,38 +296,40 @@ def results():
 
     logging.info(f"Choosed Cards Data: {selected_cards_data}")
 
-    response = make_response(render_template(
-        'results.html', 
-        intencao=intencao, 
-        selected_cards=selected_cards, 
-        choosed_cards=choosed_cards
-    ))
-    
-    # response.set_cookie('csrf_token', session['csrf_token'],
-    #                     samesite='Strict', httponly=True, secure=app.config.get("SESSION_COOKIE_SECURE", True))  # Use secure=True IF AND ONLY IF you are using HTTPS.  Otherwise, keep it False.
+    print(f"Cartas escolhidas: {choosed_cards}")
 
-    return response
+    return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards)
 
+# SocketIO event handlers
+# @socketio.on('start_generation')
+# def handle_generation(data: Dict[str, Any]):
+#     intencao = data.get('intencao', '')
+#     selected_cards = data.get('selected_cards', '')
+#     choosed_cards = data.get('choosed_cards', [])
 
-@socketio.on('connect')
-def handle_connect():
-    emit('connection_success')
-
+#     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+#     emit('generation_complete', {'reading': reading_html})
 
 @socketio.on('start_generation')
 def handle_generation(data):
+    csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
+    
+    if not csrf_token:
+        emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
+        return
+
+    try:
+        validate_csrf(csrf_token) # Validate the token
+    except ValidationError as e:  # Catch validation errors
+        emit('generation_error', {'message': str(e)}) # Emit an error event
+        return
     
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-
-    try:
-        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-        emit('generation_complete', {'reading': reading_html})
-    except Exception as e:  # Handle any exceptions during reading generation
-        logging.error(f"Error in reading generation: {e}")  # Log the error
-        emit('generation_error', {'message': 'An error occurred during generation.'})
+    
+    print(f"CSRF Token: {csrf_token}")  # Now it will only print if csrf_token is defined
     
     emit('generation_complete', {'reading': reading_html})
 
@@ -311,5 +365,4 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
-    patch_gevent()  # Patch *before* running the app
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # Or however you're starting
+    socketio.run(app, debug=True)
