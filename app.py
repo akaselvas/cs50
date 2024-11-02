@@ -365,4 +365,5 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
