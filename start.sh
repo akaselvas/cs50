@@ -1,6 +1,7 @@
 #!/bin/bash
-# Set default port if not set
-export PORT=${PORT:-10000}
 
-# Run gunicorn
-exec gunicorn --worker-class gevent -b 0.0.0.0:$PORT app:app
+# Monkey-patch
+exec python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); import app" #  <-- **FIX APP IMPORT PATH HERE**
+
+# Run gunicorn with error logging
+exec gunicorn -k gevent app:app -b 0.0.0.0:$PORT --error-logfile -  # <-- **FIX APP:APP IF NEEDED**
