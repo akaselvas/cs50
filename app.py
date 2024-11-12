@@ -1,3 +1,7 @@
+import gevent.monkey  # Import gevent's monkey-patching utility
+
+gevent.monkey.patch_all()  # Patch *everything* at the very beginning
+
 import json
 import logging
 import os
