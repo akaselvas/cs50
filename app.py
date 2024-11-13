@@ -113,7 +113,7 @@ csp={
 }
 
 # Talisman(app)
-Talisman(app, content_security_policy=csp)
+# Talisman(app, content_security_policy=csp)
 
 def sanitize_input(text: str) -> str:
     """Sanitizes user input to prevent XSS attacks."""
