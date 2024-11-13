@@ -1,6 +1,5 @@
-import gevent.monkey  # Import gevent's monkey-patching utility
-
-gevent.monkey.patch_all()  # Patch *everything* at the very beginning
+import eventlet
+eventlet.monkey_patch() # Patch *everything* at the very beginning
 
 import json
 import logging
@@ -257,4 +256,4 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
