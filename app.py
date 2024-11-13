@@ -1,5 +1,5 @@
 import eventlet
-eventlet.monkey_patch() # Patch *everything* at the very beginning
+eventlet.monkey_patch()
 
 import json
 import logging
@@ -45,7 +45,16 @@ app.config.update(
 )
 
 # Redis configuration
-redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+# redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+redis_url = os.environ.get('REDIS_URL')  # Get from Render.com environment
+if not redis_url:
+    raise RuntimeError("REDIS_URL environment variable is not set.") #Fail fast if REDIS_URL is not available.
+with app.app_context():
+    app.config['SESSION_REDIS'] = redis.from_url(redis_url)
+    redis_client = redis.Redis.from_url(redis_url)
+    Session(app)  # Initialize Flask-Session inside the app context
+
+
 app.config['SESSION_REDIS'] = redis.from_url(redis_url)
 
 # Initialize Redis client
@@ -240,8 +249,8 @@ def handle_message(data: Dict[str, str]):
         response = model.generate_content(chat_prompt)  # Assign the value here!
         emit('receive_message', {'message': response.text})
     except Exception as e:
-        logging.error(f"Error in message generation: {str(e)}")
-        emit('receive_message', {'message': "An error occurred while processing your request. Please try again later."})
+        logging.error(f"Error in message generation: {str(e)}")  # Log the error for debugging!
+        emit('receive_message', {'message': "Error processing request."}) # More user friendly error message
 
 def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: List[Dict[str, str]]) -> str:
     prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}"
