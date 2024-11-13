@@ -44,6 +44,36 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
 )
 
+csp={
+    'default-src': "'self'",
+    'style-src': [
+        "'self'",
+        "'unsafe-inline'",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com",
+    ],
+    'script-src': [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://cdnjs.cloudflare.com",
+    ],
+    'font-src': [
+        "'self'",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com",
+    ],
+    'img-src': [
+        "'self'",
+        "data:",
+    ],
+    'connect-src': [
+        "'self'",
+        "wss:",
+        "ws:",
+    ]
+}
+
 # Redis configuration
 # redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
 redis_url = os.environ.get('REDIS_URL')
@@ -82,35 +112,7 @@ limiter = Limiter(
     default_limits=["400 per day", "100 per hour"]
 )
 
-csp={
-    'default-src': "'self'",
-    'style-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "https://fonts.googleapis.com",
-        "https://fonts.gstatic.com",
-    ],
-    'script-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        "https://cdnjs.cloudflare.com",
-    ],
-    'font-src': [
-        "'self'",
-        "https://fonts.googleapis.com",
-        "https://fonts.gstatic.com",
-    ],
-    'img-src': [
-        "'self'",
-        "data:",
-    ],
-    'connect-src': [
-        "'self'",
-        "wss:",
-        "ws:",
-    ]
-}
+
 
 # Talisman(app)
 # Talisman(app, content_security_policy=csp)
