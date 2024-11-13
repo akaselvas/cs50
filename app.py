@@ -46,19 +46,30 @@ app.config.update(
 
 # Redis configuration
 # redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
-redis_url = os.environ.get('REDIS_URL')  # Get from Render.com environment
+redis_url = os.environ.get('REDIS_URL')
 if not redis_url:
-    raise RuntimeError("REDIS_URL environment variable is not set.") #Fail fast if REDIS_URL is not available.
+    raise RuntimeError("REDIS_URL environment variable is not set.")
+
 with app.app_context():
     app.config['SESSION_REDIS'] = redis.from_url(redis_url)
     redis_client = redis.Redis.from_url(redis_url)
-    Session(app)  # Initialize Flask-Session inside the app context
+
+    Session(app)  # Initialize Flask-Session
+    limiter = Limiter( #Initialize FlaskLimiter
+        get_remote_address,
+        app=app,
+        storage_uri=redis_url,
+        storage_options={"socket_connect_timeout": 30},
+        strategy="fixed-window",
+        default_limits=["400 per day", "100 per hour"]
+    )
+    Talisman(app, content_security_policy=csp) #Initialize Talisman
 
 
-app.config['SESSION_REDIS'] = redis.from_url(redis_url)
+# app.config['SESSION_REDIS'] = redis.from_url(redis_url)
 
 # Initialize Redis client
-redis_client = redis.Redis.from_url(redis_url)
+# redis_client = redis.Redis.from_url(redis_url)
 
 # csrf = CSRFProtect(app)
 Session(app)
