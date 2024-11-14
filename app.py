@@ -15,7 +15,7 @@ import bleach
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (Flask, flash, redirect, render_template, request,
-                   session, url_for, g, jsonify)
+                   session, url_for, g, jsonify, request_context)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -102,15 +102,16 @@ with app.app_context():
 # redis_client = redis.Redis.from_url(redis_url)
 
 # csrf = CSRFProtect(app)
-Session(app)
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    storage_uri=redis_url,
-    storage_options={"socket_connect_timeout": 30},
-    strategy="fixed-window",
-    default_limits=["400 per day", "100 per hour"]
-)
+
+# Session(app)
+# limiter = Limiter(
+#     get_remote_address,
+#     app=app,
+#     storage_uri=redis_url,
+#     storage_options={"socket_connect_timeout": 30},
+#     strategy="fixed-window",
+#     default_limits=["400 per day", "100 per hour"]
+# )
 
 
 
@@ -221,32 +222,88 @@ def cartas():
     return render_template('cartas.html', cards_group1=cards_group1, cards_group2=cards_group2, cards_group3=cards_group3, selected_cards=selected_cards) 
 
 
-@app.route('/results', methods=['POST'])
-@limiter.limit("5 per minute")
-def results():
-    intencao = session.get('intencao', '')
-    selected_cards = session.get('selected_cards', '')
-    selected_cards_data = request.form.get('selected_cards_data')
+# @app.route('/results', methods=['POST'])
+# @limiter.limit("5 per minute")
+# def results():
+#     intencao = session.get('intencao', '')
+#     selected_cards = session.get('selected_cards', '')
+#     selected_cards_data = request.form.get('selected_cards_data')
 
+#     try:
+#         choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
+#     except json.JSONDecodeError:
+#         choosed_cards = []
+
+#     logging.info(f"Choosed Cards Data: {selected_cards_data}")
+
+#     print(f"Cartas escolhidas: {choosed_cards}")
+
+#     return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards)
+
+@app.route('/results', methods=['POST'])
+def results():
+    with app.app_context():
+        limiter.limit("5/minute")(lambda: None)()  # Apply rate limiting
+        intencao = session.get('intencao', '')
+        selected_cards = session.get('selected_cards', '')
+
+    selected_cards_data = request.form.get('selected_cards_data')
     try:
         choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
     except json.JSONDecodeError:
         choosed_cards = []
 
-    logging.info(f"Choosed Cards Data: {selected_cards_data}")
-
     print(f"Cartas escolhidas: {choosed_cards}")
 
     return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards)
 
+
+
+# @socketio.on('start_generation')
+# def handle_generation(data):
+#     intencao = data.get('intencao', '')
+#     selected_cards = data.get('selected_cards', '')
+#     choosed_cards = data.get('choosed_cards', [])
+#     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+    
+#     emit('generation_complete', {'reading': reading_html})
+
 @socketio.on('start_generation')
 def handle_generation(data):
-    intencao = data.get('intencao', '')
-    selected_cards = data.get('selected_cards', '')
-    choosed_cards = data.get('choosed_cards', [])
+    # Reconstruct request context for session access within socketio handler
+    with request_context(app.wsgi_app, environ_overrides= {
+            "REMOTE_ADDR": "127.0.0.1"
+        }, shallow=True):
+            with app.test_client() as c:
+                with c.session_transaction() as sess:
+                    sess.update(session) # Copy session data to the new context
+                intencao = session.get('intencao', '')
+                selected_cards = session.get('selected_cards', '')
+
+
+    choosed_cards = data.get('choosed_cards', []) # Accessing data outside of request context is fine
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
     
     emit('generation_complete', {'reading': reading_html})
+
+
+# @socketio.on('send_message')
+# def handle_message(data: Dict[str, str]):
+#     message = sanitize_input(data['message'])
+#     tarot_reading = data.get('tarot_reading', '')
+
+#     try:
+#         chat_prompt = (
+#             f"Contexto: Uma leitura de tarô foi realizada com o seguinte resultado:\n\n"
+#             f"{tarot_reading}\n\nIntencao do usuário {message}\n\n"
+#             f"Por favor, forneça uma resposta com base neste contexto:"
+#         )
+#         response = model.generate_content(chat_prompt)  # Assign the value here!
+#         emit('receive_message', {'message': response.text})
+#     except Exception as e:
+#         logging.error(f"Error in message generation: {str(e)}")  # Log the error for debugging!
+#         emit('receive_message', {'message': "Error processing request."}) # More user friendly error message
+
 
 @socketio.on('send_message')
 def handle_message(data: Dict[str, str]):
@@ -259,11 +316,13 @@ def handle_message(data: Dict[str, str]):
             f"{tarot_reading}\n\nIntencao do usuário {message}\n\n"
             f"Por favor, forneça uma resposta com base neste contexto:"
         )
-        response = model.generate_content(chat_prompt)  # Assign the value here!
+        with app.app_context(): # Use app context for model prediction
+            response = model.generate_content(chat_prompt)
         emit('receive_message', {'message': response.text})
     except Exception as e:
-        logging.error(f"Error in message generation: {str(e)}")  # Log the error for debugging!
-        emit('receive_message', {'message': "Error processing request."}) # More user friendly error message
+        logging.error(f"Error in message generation: {str(e)}")
+        emit('receive_message', {'message': "Error processing request."})
+
 
 def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: List[Dict[str, str]]) -> str:
     prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}"
@@ -276,6 +335,7 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
         reading = "We're sorry, but we couldn't generate your tarot reading at this time. Please try again later."
     
     return markdown_to_html(reading)
+
 
 if __name__ == "__main__":
     socketio.run(app, debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
