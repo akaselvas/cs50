@@ -9,11 +9,23 @@ import json
 import secrets
 from dotenv import load_dotenv
 import threading
+import redis
+from flask_session import Session
 
 app = Flask(__name__)
-socketio = SocketIO(app)
-
+socketio = SocketIO(app, manage_session=False, message_queue='redis://red-cscpbjpu0jms73fah6rg:6379') # Use message queue for Redis
 load_dotenv()
+
+# Session configuration using Redis
+app.config['SESSION_TYPE'] = 'redis'
+app.config['SESSION_REDIS'] = redis.from_url('redis://red-cscpbjpu0jms73fah6rg:6379') # Your Redis connection URL
+app.config['SESSION_PERMANENT'] = False  # If you want sessions to persist after browser close, set to True
+app.config['SESSION_USE_SIGNER'] = True  # Recommended for security
+app.config['SESSION_COOKIE_SECURE'] = True # Set to True for HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Set to True for better security
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Adjust as needed for your requirements
+
+server_session = Session(app) # Initialize the server-side session
 
 # Session secret key
 app.secret_key = secrets.token_urlsafe(32)
@@ -105,20 +117,39 @@ def cartas():
     cards_group2 = cards[7:15]
     cards_group3 = cards[15:]
 
-    return render_template('cartas.html', cards_group1=cards_group1, cards_group2=cards_group2, cards_group3=cards_group3, selected_cards=selected_cards)
+    return render_template(
+        'cartas.html', 
+        cards_group1=cards_group1, 
+        cards_group2=cards_group2, 
+        cards_group3=cards_group3, 
+        selected_cards=selected_cards,
+        )
 
 # Handle tarot reading results
 @app.route('/results', methods=['POST'])
 def results():
-    intencao = session.get('intencao', '')
-    selected_cards = session.get('selected_cards', '')
+    # Important: Get session data only if a Flask session exists
+    flask_session_id = session.get('flask_session_id')
+    if flask_session_id:
+        session_data = server_session.get(flask_session_id)
+        intencao = session_data.get('intencao', '')  # Use session_data.get()
+        selected_cards = session_data.get('selected_cards', '')  # Use session_data.get()
+    else:
+         # Handle missing Flask session if necessary. Set defaults or redirect.
+        intencao = ""
+        selected_cards = ""
+        print("Warning: No flask_session_id in results route.") # Important for debugging.
+
 
     selected_cards_data = request.form.get('selected_cards_data')
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
 
-    # Renderiza a página que vai mostrar a mensagem de carregamento.
-    return render_template('results.html', intencao=intencao, selected_cards=selected_cards, choosed_cards=choosed_cards)
-
+    return render_template(
+        'results.html',
+        intencao=intencao,
+        selected_cards=selected_cards,
+        choosed_cards=choosed_cards,
+    )
 
 # Função para gerar a leitura do Tarot em uma thread separada
 def generate_tarot_reading(intencao, selected_cards, choosed_cards):
@@ -137,23 +168,40 @@ def generate_tarot_reading(intencao, selected_cards, choosed_cards):
 # Função que lida com a geração da leitura via SocketIO
 @socketio.on('start_generation')
 def handle_generation(data):
-    intencao = data.get('intencao', '')
-    selected_cards = data.get('selected_cards', '')
+    flask_session_id = session.get('flask_session_id')
+
+    if flask_session_id:
+        session_data = server_session.get(flask_session_id)
+        if session_data:
+            intencao = session_data.get('intencao', '')
+            selected_cards = session_data.get('selected_cards', '')
+        else:
+            print("Warning: Flask session data not found even though ID exists.")
+            intencao = ''
+            selected_cards = ''
+    else:
+        print("Warning: Flask session ID not found in SocketIO session.")
+        intencao = '' 
+        selected_cards = ''
+        # Better error handling here if session is essential, e.g.,
+        # socketio.emit('session_error', {'message': 'Session not found.'}, room=request.sid)
+        # return
+
     choosed_cards = data.get('choosed_cards', [])
+    room = request.sid
 
     def generate_and_emit():
         reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-        socketio.emit('generation_complete', {'reading': reading_html})
+        socketio.emit('generation_complete', {'reading': reading_html}, room=room)
 
     threading.Thread(target=generate_and_emit).start()
 
 
-# New function to handle chat messages
 @socketio.on('send_message')
 def handle_message(data):
-    room = request.sid  # Use request.sid to get the SocketIO session ID
+    room = request.sid
     message = data['message']
-    tarot_reading = data.get('tarot_reading', '')
+    tarot_reading = data.get('tarot_reading', '') # Get the reading from the client side
 
     try:
         chat_prompt = (
@@ -162,30 +210,60 @@ def handle_message(data):
             f"Please provide a response based on this context:"
         )
         response = model.generate_content(chat_prompt)
-        emit('receive_message', {'message': response.text}, room=room)
+        emit('receive_message', {'message': response.text}, room=room) # corrected.
     except Exception as e:
-        emit('receive_message', {'message': f"Error: {str(e)}"}, room=room)
+        emit('receive_message', {'message': f"Error: {str(e)}"}, room=room) # corrected
 
 
-# Join a room based on the user's session ID
 @socketio.on('connect')
 def handle_connect():
-    room = request.sid  # Each client gets their own room using request.sid
-    join_room(room)
-    socketio.emit('join', {'message': f'Client {room} connected.'}, room=room)
+    # Get the Flask session ID from the cookie
+    flask_session_id = request.cookies.get('session')
+
+    if flask_session_id:
+        # Save the Flask session ID in the SocketIO session
+        session['flask_session_id'] = flask_session_id  # Use the same key as in previous examples
+
+        room = request.sid # Still maintain a room per client for individual communication.
+        join_room(room)
+        socketio.emit('join', {'message': f'Client {room} connected.'}, room=room)
+    else:
+        # Handle cases where the session cookie is missing (e.g., redirect to login)
+        print("Warning: No Flask session cookie found for SocketIO connection.") # Log the missing cookie
+        # Consider disconnecting the socket or emitting an error to the client
+        socketio.emit('error', {'message': 'Session cookie missing.'}, room=request.sid) 
+        # return False  # Or return False to refuse the connection
 
 
-# Function that emits only to the client's specific room
+
 @socketio.on('start_generation')
 def handle_generation(data):
-    room = request.sid  # Use request.sid here as well
-    intencao = data.get('intencao', '')
-    selected_cards = data.get('selected_cards', '')
-    choosed_cards = data.get('choosed_cards', [])
+    # Retrieve the Flask session ID from the SocketIO session
+    flask_session_id = session.get('flask_session_id') 
+
+    if flask_session_id:
+        # Retrieve values from the Flask session using the saved ID
+        session_data = server_session.get(flask_session_id) # Use the Session object here
+        if session_data:
+            intencao = session_data.get('intencao', '')
+            selected_cards = session_data.get('selected_cards', '')
+        else:
+            print("Warning: Flask session data not found even though ID exists.")
+            intencao = '' # Provide defaults if needed
+            selected_cards = ''
+    else:
+        print("Warning: Flask session ID not found in SocketIO session.")
+        intencao = ''
+        selected_cards = ''
+        # Handle missing session (e.g., return error or disconnect)
+
+    choosed_cards = data.get('choosed_cards', [])  # This is received from client
+    room = request.sid
 
     def generate_and_emit():
         reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
         socketio.emit('generation_complete', {'reading': reading_html}, room=room)
+
 
     threading.Thread(target=generate_and_emit).start()
 
