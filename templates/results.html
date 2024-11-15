@@ -150,6 +150,29 @@
         addMessage('bot', data.message);
     });
 
+    socket.on('connect_error', (error) => {   // Add a connect_error handler.
+        console.error('Socket.IO connection error:', error);
+        // Handle the error appropriately, for example:
+        if (error.message === 'Session cookie missing.') {
+            alert('Your session has expired. Please refresh the page.');
+            window.location.href = '/'; // Redirect to home page.
+        }
+    });
+
+      // Listen for the session_error event (emitted by the server)
+    socket.on('session_error', (data) => {
+        console.error('Session error:', data.message);  // Log it (important for debugging).
+        alert(data.message); // Display an alert to the user.
+        // Optionally, redirect the user:
+        window.location.href = '/';
+    });
+
+
+     // Listener for redirect
+    socket.on('redirect', (data) => {
+        window.location.href = data.url; // Redirect the user
+    });
+
     function showLoadingIndicator() {
         const loadingDiv = document.createElement('div');
         loadingDiv.classList.add('chat-message', 'bot-message');
