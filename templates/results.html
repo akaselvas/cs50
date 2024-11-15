@@ -43,17 +43,11 @@
     </div>
 </div>
 
+<!-- Incluindo o script do Socket.IO -->
+<script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/2.0.3/marked.min.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
 <script>
-
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
     const socket = io();
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
@@ -69,26 +63,19 @@
     let tarotReading = '';
     let isFirstChatOpen = true;
 
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
-        choosed_cards: {{ choosed_cards | tojson }},
+        choosed_cards: {{ choosed_cards | tojson }}
     });
 
-
-    socket.on('generation_complete', function (data) {
+    socket.on('generation_complete', function(data) {
         document.getElementById('loading-message').style.display = 'none';
         resultArea.style.display = 'block';
         document.getElementById('tarot-reading').innerHTML = data.reading;
         tarotReading = data.reading;
-
-        setTimeout(checkContentOverflow, 40000);
+        
+        setTimeout(checkContentOverflow, 100);
     });
 
     function checkContentOverflow() {
@@ -113,12 +100,12 @@
         const scrollTop = contentWrapper.scrollTop;
         const scrollHeight = contentWrapper.scrollHeight;
         const clientHeight = contentWrapper.clientHeight;
-        const tolerance = 5;
+        const tolerance = 5; // pixels of tolerance
 
         return scrollTop + clientHeight >= scrollHeight - tolerance;
     }
 
-    contentWrapper.addEventListener('scroll', function () {
+    contentWrapper.addEventListener('scroll', function() {
         if (isAtBottom()) {
             hideScrollIndicators();
         } else if (resultArea.scrollHeight > contentWrapper.clientHeight) {
@@ -131,7 +118,7 @@
     openChatButton.addEventListener('click', () => {
         chatInterface.style.display = 'flex';
         chatOverlay.style.display = 'block';
-
+        
         if (isFirstChatOpen) {
             addMessage('bot', 'Olá, vamos conversar mais sobre sua leitura, o que você quer saber?');
             isFirstChatOpen = false;
@@ -187,11 +174,12 @@
     function addMessage(sender, content) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('chat-message', sender === 'user' ? 'user-message' : 'bot-message');
-
+        
+        // Parse markdown for bot messages
         if (sender === 'bot') {
             content = marked.parse(content);
         }
-
+        
         messageDiv.innerHTML = `<div class="chat-message-content">${content}</div>`;
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;

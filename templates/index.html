@@ -34,64 +34,29 @@
             </div>
         </form>
     </div>
-        
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('tarotForm');
-            const botoes = document.querySelectorAll('.botao-personalizado');
-            const selectedCardsInput = document.getElementById('selectedCards');
-            
-            botoes.forEach(botao => {
-                botao.addEventListener('click', () => {
-                    botoes.forEach(b => {
-                        b.classList.remove('active');
-                        b.style.opacity = '0.5';
-                        b.disabled = true;
-                    });
-                    botao.classList.add('active');
-                    botao.style.opacity = '1';
-                    botao.disabled = false;
-                    selectedCardsInput.value = botao.getAttribute('data-value');
+        const botoes = document.querySelectorAll('.botao-personalizado');
+        const selectedCardsInput = document.getElementById('selectedCards');
+        
+        botoes.forEach(botao => {
+            botao.addEventListener('click', () => {
+                botoes.forEach(b => {
+                    b.classList.remove('active');
+                    b.style.opacity = '0.5';
+                    b.disabled = true;
                 });
-            });
-            
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
-
-                if (!selectedCardsInput.value) {
-                    alert('Por favor, selecione o número de cartas antes de continuar.');
-                    return;
-                }
-
-                const formData = new FormData(form);
-                
-                try {
-                    const response = await fetch(form.action, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        credentials: 'same-origin'
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        window.location.href = data.redirect;
-                    } else {
-                        if (data.error) {
-                            window.location.reload();
-                            return;
-                        }
-                        alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
-                    }
-                } catch (error) {
-                    console.error('Submission error:', error);
-                    alert('Ocorreu um erro. Por favor, tente novamente.');
-                }
+                botao.classList.add('active');
+                botao.style.opacity = '1';
+                botao.disabled = false;
+                selectedCardsInput.value = botao.getAttribute('data-value');
             });
         });
+        
+        document.getElementById('tarotForm').addEventListener('submit', function(e) {
+            if (!selectedCardsInput.value) {
+                e.preventDefault();
+                alert('Por favor, selecione o número de cartas antes de continuar.');
+            }
+        });
     </script>
-
 {% endblock %}
