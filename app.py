@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()  # This is the crucial line!
+
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, emit, join_room
 from markupsafe import Markup
@@ -165,37 +168,6 @@ def generate_tarot_reading(intencao, selected_cards, choosed_cards):
     # Retorna o resultado processado como HTML seguro
     return markdown_to_html(reading)
 
-# Função que lida com a geração da leitura via SocketIO
-@socketio.on('start_generation')
-def handle_generation(data):
-    flask_session_id = session.get('flask_session_id')
-
-    if flask_session_id:
-        session_data = server_session.get(flask_session_id)
-        if session_data:
-            intencao = session_data.get('intencao', '')
-            selected_cards = session_data.get('selected_cards', '')
-        else:
-            print("Warning: Flask session data not found even though ID exists.")
-            intencao = ''
-            selected_cards = ''
-    else:
-        print("Warning: Flask session ID not found in SocketIO session.")
-        intencao = '' 
-        selected_cards = ''
-        # Better error handling here if session is essential, e.g.,
-        # socketio.emit('session_error', {'message': 'Session not found.'}, room=request.sid)
-        # return
-
-    choosed_cards = data.get('choosed_cards', [])
-    room = request.sid
-
-    def generate_and_emit():
-        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-        socketio.emit('generation_complete', {'reading': reading_html}, room=room)
-
-    threading.Thread(target=generate_and_emit).start()
-
 
 @socketio.on('send_message')
 def handle_message(data):
@@ -235,7 +207,6 @@ def handle_connect():
         # return False  # Or return False to refuse the connection
 
 
-
 @socketio.on('start_generation')
 def handle_generation(data):
     # Retrieve the Flask session ID from the SocketIO session
@@ -267,7 +238,50 @@ def handle_generation(data):
 
     threading.Thread(target=generate_and_emit).start()
 
+import eventlet
+eventlet.monkey_patch()  # This is the crucial line!
+
+from flask import Flask, render_template, request, redirect, url_for, session  # Import session here
+# ... (rest of your imports)
+
+# ... (app setup, session config, etc.)
+
+
+@socketio.on('connect')
+def handle_connect():
+    flask_session_id = request.cookies.get('session')
+    if flask_session_id:
+        session['flask_session_id'] = flask_session_id
+        # ... (rest of your connect handler)
+    else:
+        # IMPORTANT: Redirect or handle missing session properly
+        # Don't proceed with SocketIO connection if the session is missing.
+        # This is likely the root cause of the "invalid session" errors.
+        emit('session_error', {'message': 'Session not found. Please refresh or log in again.'}, room=request.sid)
+        return False  # Disconnect the socket
+
+@socketio.on('start_generation')  # Ensure you only have ONE start_generation handler.
+def handle_generation(data):
+    # Correctly retrieve values from the Flask session
+    flask_session_id = session.get('flask_session_id')
+    if flask_session_id:
+        session_data = server_session.get(flask_session_id)  # Use server_session here
+        if session_data:  # Check for session data
+            intencao = session_data.get('intencao', '')
+            selected_cards = session_data.get('selected_cards', '')
+        else:
+            # Handle missing session data.  Redirect, return an error, or set defaults.
+            emit('session_error', {'message': 'Session data not found.'}, room=request.sid)
+            return  # Important: Don't proceed
+
+    else:
+       # Handle missing Flask Session ID.  Redirect, return error, or disconnect.
+        emit('session_error', {'message': 'Session ID not found.'}, room=request.sid)
+        return
+
+    # ... (rest of your handle_generation function)
+
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
