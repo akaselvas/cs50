@@ -134,9 +134,10 @@ def results():
     # Important: Get session data only if a Flask session exists
     flask_session_id = session.get('flask_session_id')
     if flask_session_id:
-        session_data = server_session.get(flask_session_id)
-        intencao = session_data.get('intencao', '')  # Use session_data.get()
-        selected_cards = session_data.get('selected_cards', '')  # Use session_data.get()
+        with app.app_context():  # VERY IMPORTANT: Add the app context here
+            session_data = server_session.get(flask_session_id)
+            intencao = session_data.get('intencao', '')  # Use session_data.get()
+            selected_cards = session_data.get('selected_cards', '')  # Use session_data.get()
     else:
          # Handle missing Flask session if necessary. Set defaults or redirect.
         intencao = ""
@@ -189,12 +190,19 @@ def handle_message(data):
 
 @socketio.on('connect')
 def handle_connect():
-    # Get the Flask session ID from the cookie
     flask_session_id = request.cookies.get('session')
-
     if flask_session_id:
-        # Save the Flask session ID in the SocketIO session
-        session['flask_session_id'] = flask_session_id  # Use the same key as in previous examples
+        session['flask_session_id'] = flask_session_id
+
+        with app.app_context(): # Add app context for session
+            # Get the user's session from server_session with the Flask session ID.
+            user_session = server_session.get(flask_session_id)
+
+            if user_session is not None and user_session.get('intencao'):  # Add check to user_session
+                # Now access data in the route with the same key as used before.
+                print(f"Session data found {user_session.get('intencao')}")
+            else:
+                print("No session data available yet or 'intencao' not in session")  # Indicate session not complete
 
         room = request.sid # Still maintain a room per client for individual communication.
         join_room(room)
@@ -204,82 +212,38 @@ def handle_connect():
         print("Warning: No Flask session cookie found for SocketIO connection.") # Log the missing cookie
         # Consider disconnecting the socket or emitting an error to the client
         socketio.emit('error', {'message': 'Session cookie missing.'}, room=request.sid) 
-        # return False  # Or return False to refuse the connection
+        return False  # Or return False to refuse the connection
 
 
 @socketio.on('start_generation')
 def handle_generation(data):
-    # Retrieve the Flask session ID from the SocketIO session
-    flask_session_id = session.get('flask_session_id') 
-
-    if flask_session_id:
-        # Retrieve values from the Flask session using the saved ID
-        session_data = server_session.get(flask_session_id) # Use the Session object here
-        if session_data:
-            intencao = session_data.get('intencao', '')
-            selected_cards = session_data.get('selected_cards', '')
-        else:
-            print("Warning: Flask session data not found even though ID exists.")
-            intencao = '' # Provide defaults if needed
-            selected_cards = ''
-    else:
-        print("Warning: Flask session ID not found in SocketIO session.")
-        intencao = ''
-        selected_cards = ''
-        # Handle missing session (e.g., return error or disconnect)
-
-    choosed_cards = data.get('choosed_cards', [])  # This is received from client
-    room = request.sid
-
-    def generate_and_emit():
-        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-        socketio.emit('generation_complete', {'reading': reading_html}, room=room)
-
-
-    threading.Thread(target=generate_and_emit).start()
-
-import eventlet
-eventlet.monkey_patch()  # This is the crucial line!
-
-from flask import Flask, render_template, request, redirect, url_for, session  # Import session here
-# ... (rest of your imports)
-
-# ... (app setup, session config, etc.)
-
-
-@socketio.on('connect')
-def handle_connect():
-    flask_session_id = request.cookies.get('session')
-    if flask_session_id:
-        session['flask_session_id'] = flask_session_id
-        # ... (rest of your connect handler)
-    else:
-        # IMPORTANT: Redirect or handle missing session properly
-        # Don't proceed with SocketIO connection if the session is missing.
-        # This is likely the root cause of the "invalid session" errors.
-        emit('session_error', {'message': 'Session not found. Please refresh or log in again.'}, room=request.sid)
-        return False  # Disconnect the socket
-
-@socketio.on('start_generation')  # Ensure you only have ONE start_generation handler.
-def handle_generation(data):
-    # Correctly retrieve values from the Flask session
     flask_session_id = session.get('flask_session_id')
     if flask_session_id:
-        session_data = server_session.get(flask_session_id)  # Use server_session here
-        if session_data:  # Check for session data
-            intencao = session_data.get('intencao', '')
-            selected_cards = session_data.get('selected_cards', '')
-        else:
-            # Handle missing session data.  Redirect, return an error, or set defaults.
-            emit('session_error', {'message': 'Session data not found.'}, room=request.sid)
-            return  # Important: Don't proceed
+        with app.app_context():  # Add app context for session access
+            session_data = server_session.get(flask_session_id)
+            if session_data:
+                intencao = session_data.get('intencao', '')
+                selected_cards = session_data.get('selected_cards', '')
+            else:
+                # Handle missing session data consistently.  Here, we emit an error:
+                print("Warning: Flask session data not found.") # Log for debugging.
+                emit('session_error', {'message': 'Session data not found. Please refresh the page.'}, room=request.sid)
+                return # Don't proceed
+
+        choosed_cards = data.get('choosed_cards', [])
+        room = request.sid
+
+        def generate_and_emit():
+            reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+            socketio.emit('generation_complete', {'reading': reading_html}, room=room)
+
+        threading.Thread(target=generate_and_emit).start()
 
     else:
-       # Handle missing Flask Session ID.  Redirect, return error, or disconnect.
-        emit('session_error', {'message': 'Session ID not found.'}, room=request.sid)
-        return
-
-    # ... (rest of your handle_generation function)
+        # Handle missing session ID consistently:
+        print("Warning: Flask session ID not found.") # Logging
+        emit('session_error', {'message': 'Session ID not found. Please refresh the page.'}, room=request.sid)  # Client-side handling
+        return  # Stop processing
 
 
 
