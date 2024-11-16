@@ -70,10 +70,14 @@ def process_form():
     intencao = request.form.get('intencao')
     selected_cards = request.form.get('selectedCards')
 
-    session['intencao'] = intencao
-    session['selected_cards'] = selected_cards
-    
-    return redirect(url_for('cartas'))
+    with app.app_context(): # Important: Use app context
+        session['intencao'] = intencao  # Store directly in the session
+        session['selected_cards'] = selected_cards
+        session.modified = True  # Essential: Mark the session as modified
+
+        server_session.save_session(session) # Save the Flask session to Redis
+
+    return redirect(url_for('cartas'))  # Correct redirect
 
 # Display cards
 @app.route('/cartas')
@@ -131,20 +135,19 @@ def cartas():
 # Handle tarot reading results
 @app.route('/results', methods=['POST'])
 def results():
-    flask_session_id = session.get('flask_session_id')  # Correct usage
-    if flask_session_id:
-        with app.app_context():
-            session_data = server_session.load_session(session)  # Load session correctly
-            if session_data and 'intencao' in session_data and 'selected_cards' in session_data: # Combined check
-                    intencao = session_data.get('intencao')
-                    selected_cards = session_data.get('selected_cards')
-                    server_session.delete_session(session) # Clean up after retrieving the data
-            else:
-                print("Error: Incomplete session data in /results")
-                return redirect(url_for('home'))  # Or handle appropriately
-    else:
-        print("Error: No flask_session_id in /results")
-        return redirect(url_for('home'))
+    if 'flask_session_id' not in session:  # Check and redirect EARLY
+            print("Error: flask_session_id not found in results route.")
+            return redirect(url_for('home'))
+    with app.app_context():  # Absolutely required for server-side session access
+        session_data = server_session.load_session(session) 
+
+        if not session_data or not all(key in session_data for key in ['intencao', 'selected_cards']):
+            print("Error: Incomplete session data in /results.")
+            return redirect(url_for('home'))
+
+        intencao = session_data['intencao']
+        selected_cards = session_data['selected_cards']
+        server_session.delete_session(session)  # Clean up    
 
     selected_cards_data = request.form.get('selected_cards_data')
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
@@ -192,51 +195,49 @@ def handle_message(data):
 @socketio.on('connect')
 def handle_connect():
     flask_session_id = request.cookies.get('session')
-    if not flask_session_id:
-        print("No session cookie. Disconnecting Socket.")
+
+    if flask_session_id:
+        with app.app_context():
+            session['flask_session_id'] = flask_session_id  # Correct placement
+            server_session.save_session(session) # Essential: Save the updated Flask session data.
+
+        room = request.sid
+        join_room(room) # Very important for client-specific messaging
+        emit('connected', {'data': 'Socket.IO connected'}, room=room) # Confirmation to client
+        
+    else:
         return False  # Disconnect immediately
 
-    with app.app_context():  # Add app context
-        session['flask_session_id'] = flask_session_id
-        room = request.sid
-        join_room(room) # Very important for individual messaging
 
-        emit('connected', {'message': 'Socket.IO connected'}, room=room) # Simplify this message
-
-
-@socketio.on('start_generation')  # Correct decorator
+@socketio.on('start_generation')  # Decorator corrected
 def handle_generation(data):
+    if 'flask_session_id' not in session: # Early exit if no flask_session_id, to avoid errors.
+        print("Warning: flask_session_id not found in handle_generation")
+        emit('session_error', {'message': 'Session not found.'}, room=request.sid)  # Error message to client
+        return
 
-    flask_session_id = session.get('flask_session_id')
-    if not flask_session_id:  # Handle this first for clarity
-        print("Warning: No flask_session_id found in handle_generation")
-        emit('session_error', {'message': 'Session not found.'}, room=request.sid)  # Send consistent error message
-        return False # Added for consistency; may not be strictly needed with return already present, but good practice
 
-    with app.app_context(): # Critical:  Must use app context for server-side sessions
-        session_data = server_session.load_session(session)
-
-        if session_data is None or not all(key in session_data for key in ['intencao', 'selected_cards']):
-            # Handle missing or incomplete session data (emit error and return or set defaults).
-            # If you are deleting the data at the end, default values might not be useful here.
-            print("Warning: Incomplete session data in handle_generation.") # Log warning or handle as needed
-            emit('session_error', {'message': 'Session data incomplete.'}, room=request.sid) 
-            return  # Do not proceed
-
+    with app.app_context():
+        session_data = server_session.load_session(session) # Load the session
+        if not session_data or 'intencao' not in session_data or 'selected_cards' not in session_data:  # Handle missing or incomplete session data
+            print("Warning: Incomplete session data in handle_generation.")
+            emit('session_error', {'message': 'Session data incomplete.'}, room=request.sid) # Consistent error
+            return  # Don't proceed
 
         intencao = session_data.get('intencao')
         selected_cards = session_data.get('selected_cards')
-        server_session.delete_session(session)  # Delete session data *after* accessing
+
+        server_session.delete_session(session) # Clean up session data after it is used.
 
 
-        choosed_cards = data.get('choosed_cards', [])
-        room = request.sid
+    choosed_cards = data.get('choosed_cards', [])
+    room = request.sid
 
-        def generate_and_emit():
-            reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-            socketio.emit('generation_complete', {'reading': reading_html}, room=room)
+    def generate_and_emit():
+        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+        socketio.emit('generation_complete', {'reading': reading_html}, room=room)
 
-        threading.Thread(target=generate_and_emit).start()
+    threading.Thread(target=generate_and_emit).start()
 
     # else:
     #     # Handle missing session ID consistently:
