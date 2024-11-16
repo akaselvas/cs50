@@ -131,35 +131,23 @@ def cartas():
 # Handle tarot reading results
 @app.route('/results', methods=['POST'])
 def results():
-    flask_session_id = session.get('flask_session_id')
+    flask_session_id = session.get('flask_session_id')  # Correct usage
     if flask_session_id:
-
-        # CORRECT way to access Flask server-side session data.
-        # Use session.get() after loading the session.
-
         with app.app_context():
             session_data = server_session.load_session(session)  # Load session correctly
-            if session_data:
-                intencao = session_data.get('intencao', '')
-                selected_cards = session_data.get('selected_cards', '')
-
-
-                # Remove the data from the server-side session after retrieving it,
-                # to avoid potential memory leaks or issues with stale data.
-
-                server_session.delete_session(session) # Clear the session data after use.
-            else:  # Handle missing session data
-                intencao = ""
-                selected_cards = ""
-                print("Warning: Session data not found in /results.")
+            if session_data and 'intencao' in session_data and 'selected_cards' in session_data: # Combined check
+                    intencao = session_data.get('intencao')
+                    selected_cards = session_data.get('selected_cards')
+                    server_session.delete_session(session) # Clean up after retrieving the data
+            else:
+                print("Error: Incomplete session data in /results")
+                return redirect(url_for('home'))  # Or handle appropriately
     else:
-        intencao = ""
-        selected_cards = ""
-        print("Warning: No flask_session_id found in /results.")
+        print("Error: No flask_session_id in /results")
+        return redirect(url_for('home'))
 
     selected_cards_data = request.form.get('selected_cards_data')
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
-
 
     return render_template(
         'results.html',
@@ -204,41 +192,42 @@ def handle_message(data):
 @socketio.on('connect')
 def handle_connect():
     flask_session_id = request.cookies.get('session')
-    if flask_session_id:
-        session['flask_session_id'] = flask_session_id  # Store the Flask session ID
+    if not flask_session_id:
+        print("No session cookie. Disconnecting Socket.")
+        return False  # Disconnect immediately
 
-        #  We no longer need to access session data here in the connect handler.
+    with app.app_context():  # Add app context
+        session['flask_session_id'] = flask_session_id
+        room = request.sid
+        join_room(room) # Very important for individual messaging
 
-        room = request.sid  # Important to keep for room management
-        join_room(room) # Important!
-        socketio.emit('join', {'message': f'Client {room} connected.'}, room=room)
-
-    else:
-        # Handle missing session (redirect or disconnect)
-        emit('session_error', {'message': 'Session cookie missing.'}, room=request.sid)  # Emit error
-        return False  # Disconnect the socket
+        emit('connected', {'message': 'Socket.IO connected'}, room=room) # Simplify this message
 
 
-socketio.on('start_generation')
+@socketio.on('start_generation')  # Correct decorator
 def handle_generation(data):
+
     flask_session_id = session.get('flask_session_id')
-    if flask_session_id:
+    if not flask_session_id:  # Handle this first for clarity
+        print("Warning: No flask_session_id found in handle_generation")
+        emit('session_error', {'message': 'Session not found.'}, room=request.sid)  # Send consistent error message
+        return False # Added for consistency; may not be strictly needed with return already present, but good practice
 
-        # Use session.get() inside an app context
-        with app.app_context():
-            session_data = server_session.load_session(session) # Load the session
-            if session_data:
+    with app.app_context(): # Critical:  Must use app context for server-side sessions
+        session_data = server_session.load_session(session)
 
-                intencao = session_data.get('intencao', '')  # Use get on session_data
-                selected_cards = session_data.get('selected_cards', '')  # Use get on session_data
+        if session_data is None or not all(key in session_data for key in ['intencao', 'selected_cards']):
+            # Handle missing or incomplete session data (emit error and return or set defaults).
+            # If you are deleting the data at the end, default values might not be useful here.
+            print("Warning: Incomplete session data in handle_generation.") # Log warning or handle as needed
+            emit('session_error', {'message': 'Session data incomplete.'}, room=request.sid) 
+            return  # Do not proceed
 
-                server_session.delete_session(session)  # Important: Clear session data after use
 
-            else:
-                # Handle the missing session data appropriately
-                print("Warning: Flask session data not found in handle_generation")
-                emit('session_error', {'message': 'Session data not found.'}, room=request.sid)  # Or other handling
-                return # Do not proceed
+        intencao = session_data.get('intencao')
+        selected_cards = session_data.get('selected_cards')
+        server_session.delete_session(session)  # Delete session data *after* accessing
+
 
         choosed_cards = data.get('choosed_cards', [])
         room = request.sid
@@ -249,13 +238,14 @@ def handle_generation(data):
 
         threading.Thread(target=generate_and_emit).start()
 
-    else:
-        # Handle missing session ID consistently:
-        print("Warning: Flask session ID not found.") # Logging
-        emit('session_error', {'message': 'Session ID not found. Please refresh the page.'}, room=request.sid)  # Client-side handling
-        return  # Stop processing
+    # else:
+    #     # Handle missing session ID consistently:
+    #     print("Warning: Flask session ID not found.") # Logging
+    #     emit('session_error', {'message': 'Session ID not found. Please refresh the page.'}, room=request.sid)  # Client-side handling
+    #     return  # Stop processing
 
 
 
 if __name__ == "__main__":
+    app.config['SESSION_COOKIE_SECURE'] = False  # Set to False for local development
     socketio.run(app, debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
