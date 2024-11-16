@@ -162,7 +162,7 @@
     socket.on('connect_error', (error) => {
         console.error('Socket.IO connection error:', error);
         if (error.message === 'Session cookie missing.') {
-            alert('Your session has expired. Please return to the main page.');  # Clearer message
+            alert('Your session has expired. Please return to the main page.');
             window.location.href = '/';  // Redirect
         }  else if (error.message === 'Session not found. Please refresh or log in again.') {
             // Handle "Session not found" error consistently
@@ -174,7 +174,7 @@
       // Listen for the session_error event (emitted by the server)
     socket.on('session_error', (data) => {
         console.error('Session error:', data.message);
-        alert(data.message + " Please return to the main page.");  # Consistent message
+        alert(data.message + " Please return to the main page."); 
         window.location.href = '/'; // Ensure redirection
     });
 
