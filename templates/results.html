@@ -145,26 +145,37 @@
         }
     }
 
+    socket.on('connect', () => {
+        console.log("Connected to Socket.IO");
+        socket.emit('start_generation', {  // Now you can safely emit this
+            intencao: "{{ intencao }}",
+            selected_cards: "{{ selected_cards }}",
+            choosed_cards: {{ choosed_cards | tojson }}
+        });
+    });
+
     socket.on('receive_message', (data) => {
         removeLoadingIndicator();
         addMessage('bot', data.message);
     });
 
-    socket.on('connect_error', (error) => {   // Add a connect_error handler.
+    socket.on('connect_error', (error) => {
         console.error('Socket.IO connection error:', error);
-        // Handle the error appropriately, for example:
         if (error.message === 'Session cookie missing.') {
-            alert('Your session has expired. Please refresh the page.');
-            window.location.href = '/'; // Redirect to home page.
-        }
+            alert('Your session has expired. Please return to the main page.');  # Clearer message
+            window.location.href = '/';  // Redirect
+        }  else if (error.message === 'Session not found. Please refresh or log in again.') {
+            // Handle "Session not found" error consistently
+            alert('Session not found. Please return to the main page.');
+            window.location.href = '/';
+        }  // Add more specific error handling as needed
     });
 
       // Listen for the session_error event (emitted by the server)
     socket.on('session_error', (data) => {
-        console.error('Session error:', data.message);  // Log it (important for debugging).
-        alert(data.message); // Display an alert to the user.
-        // Optionally, redirect the user:
-        window.location.href = '/';
+        console.error('Session error:', data.message);
+        alert(data.message + " Please return to the main page.");  # Consistent message
+        window.location.href = '/'; // Ensure redirection
     });
 
 
