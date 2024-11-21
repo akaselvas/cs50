@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 import threading
 import redis
 from flask_session import Session
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = secrets.token_urlsafe(32)
@@ -24,7 +25,7 @@ load_dotenv()
 # Session configuration using Redis
 app.config['SESSION_TYPE'] = 'redis'
 app.config['SESSION_REDIS'] = redis.from_url('redis://red-cscpbjpu0jms73fah6rg:6379') # Your Redis connection URL
-app.config['SESSION_PERMANENT'] = False  # If you want sessions to persist after browser close, set to True
+app.config['SESSION_PERMANENT'] = True  # If you want sessions to persist after browser close, set to True
 app.config['SESSION_USE_SIGNER'] = True  # Recommended for security
 app.config['SESSION_COOKIE_SECURE'] = True # Set to True for HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Set to True for better security
@@ -60,6 +61,17 @@ model = create_model()
 # Convert markdown text to HTML safely
 def markdown_to_html(text):
     return Markup(markdown.markdown(text, extensions=['fenced_code', 'codehilite']))
+
+# Decorator to handle session errors gracefully
+def handle_session_errors(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with app.app_context():
+            if not all(key in session for key in ['intencao', 'selected_cards']):
+                print("Warning: Incomplete session data.")
+                return "Session data incomplete.", 400  # Return a 400 error to the client.
+        return func(*args, **kwargs)
+    return wrapper
 
 # Home page route
 @app.route('/')
@@ -132,6 +144,7 @@ def cartas():
 
 # Handle tarot reading results
 @app.route('/results', methods=['GET','POST'])
+@handle_session_errors # Using the decorator
 def results():
     selected_cards_data = request.form.get('selected_cards_data') or request.args.get('selected_cards_data') 
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
@@ -144,7 +157,7 @@ def results():
     # choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
 
     if intencao is None or selected_cards is None:
-        return redirect(url_for('home')) #Handle missing session data gracefully
+        return "Session Expired. Please restart from the home page.", 400
 
     return render_template(
         'results.html',
@@ -194,27 +207,23 @@ def handle_connect():
     
 
 @socketio.on('start_generation')  # Decorator corrected
+@handle_session_errors #Decorator in Socket.IO event
 def handle_generation(data):
-    with app.app_context():
-        if not all(key in session for key in ['intencao', 'selected_cards']):  #Check session directly
-            print("Warning: Incomplete session data in handle_generation.")
-            emit('session_error', {'message': 'Session data incomplete.'}, room=request.sid)
-            return
 
     intencao = session['intencao']
     selected_cards = session['selected_cards']
 
     choosed_cards = data.get('choosed_cards', [])
     room = request.sid
-    session.clear() 
+    # session.clear() 
     def generate_and_emit():
         reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
         socketio.emit('generation_complete', {'reading': reading_html}, room=room)
-
+        session.clear() # Cleared only after successful emission.
     threading.Thread(target=generate_and_emit).start()
 
 
 
 if __name__ == "__main__":
-    app.config['SESSION_COOKIE_SECURE'] = False  # Set to False for local development
+    app.config['SESSION_COOKIE_SECURE'] = True  # Set to False for local development 
     socketio.run(app, debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
