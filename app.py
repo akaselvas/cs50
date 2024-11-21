@@ -137,13 +137,13 @@ def results():
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
     intencao = session.get('intencao')
     # intencao = session_data['intencao']
-    selected_cards = session.get('selected_cards')
+    selected_cards = session.get('selected_cards') 
     # selected_cards = session_data['selected_cards']
 
     # selected_cards_data = request.form.get('selected_cards_data')
     # choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
 
-    if intencao is None or selected_cards_count is None:
+    if intencao is None or selected_cards is None:
         return redirect(url_for('home')) #Handle missing session data gracefully
 
     return render_template(
