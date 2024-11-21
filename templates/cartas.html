@@ -20,7 +20,8 @@
         {% endfor %}
     </div>
     <div class="container-botoes" style="display: none;">
-        <button type="submit" class="botao-texto-grande">
+        <button type="button" id="leituraButton" class="botao-texto-grande">vamos fazer a leitura</button>
+        <!-- <button type="submit" class="botao-texto-grande"> -->
             vamos fazer a leitura
         </button>
     </div>
@@ -77,23 +78,52 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    leituraButton.addEventListener('click', function (e) {
-        e.preventDefault(); 
+    // leituraButton.addEventListener('click', function (e) {
+    //     e.preventDefault(); 
 
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{{ url_for("results") }}';
+    //     const form = document.createElement('form');
+    //     form.method = 'POST';
+    //     form.action = '{{ url_for("results") }}';
 
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'selected_cards_data';
-        input.value = JSON.stringify(selectedCardsData);
+    //     const input = document.createElement('input');
+    //     input.type = 'hidden';
+    //     input.name = 'selected_cards_data';
+    //     input.value = JSON.stringify(selectedCardsData);
 
-        form.appendChild(input);
-        document.body.appendChild(form);
+    //     form.appendChild(input);
+    //     document.body.appendChild(form);
 
-        form.submit();
+    //     form.submit();
+    // });
+    
+    document.getElementById('leituraButton').addEventListener('click', function (e) {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('selected_cards_data', JSON.stringify(selectedCardsData));
+        
+        fetch("{{ url_for('results') }}", {
+            method: 'POST',
+            body: formData,
+            credentials: 'include' // This is crucial to send cookies!
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(data => {
+             //Handle response (optional - you might not need this unless you are processing the result on the client side)
+            //console.log(data);
+            window.location.href = "{{ url_for('results') }}";
+        })
+        .catch(error => {
+            console.error('Error submitting form:', error);
+            alert('An error occurred. Please try again.');
+        });
+
     });
+
 });
 </script>
 {% endblock %}
