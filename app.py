@@ -16,6 +16,8 @@ import redis
 from flask_session import Session
 
 app = Flask(__name__)
+app.secret_key = secrets.token_urlsafe(32)
+
 socketio = SocketIO(app, manage_session=False, message_queue='redis://red-cscpbjpu0jms73fah6rg:6379') # Use message queue for Redis
 load_dotenv()
 
@@ -28,10 +30,10 @@ app.config['SESSION_COOKIE_SECURE'] = True # Set to True for HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Set to True for better security
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Adjust as needed for your requirements
 
-server_session = Session(app) # Initialize the server-side session
+Session(app) # Initialize the server-side session
 
 # Session secret key
-app.secret_key = secrets.token_urlsafe(32)
+
 
 # Load API key from environment variables
 api_key = os.getenv("GENAI_API_KEY")
@@ -131,22 +133,18 @@ def cartas():
 # Handle tarot reading results
 @app.route('/results', methods=['POST'])
 def results():
-    if 'flask_session_id' not in session:  # Check and redirect EARLY
-            print("Error: flask_session_id not found in results route.")
-            return redirect(url_for('home'))
-    with app.app_context():  # Absolutely required for server-side session access
-        # session_data = server_session.load_session(session) 
-
-        if not session_data or not all(key in session_data for key in ['intencao', 'selected_cards']):
-            print("Error: Incomplete session data in /results.")
-            return redirect(url_for('home'))
-
-        intencao = session_data['intencao']
-        selected_cards = session_data['selected_cards']
-        server_session.delete_session(session)  # Clean up    
-
     selected_cards_data = request.form.get('selected_cards_data')
     choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
+    intencao = session.get('intencao')
+    # intencao = session_data['intencao']
+    selected_cards = session.get('selected_cards')
+    # selected_cards = session_data['selected_cards']
+
+    # selected_cards_data = request.form.get('selected_cards_data')
+    # choosed_cards = json.loads(selected_cards_data) if selected_cards_data else []
+
+    if intencao is None or selected_cards_count is None:
+        return redirect(url_for('home')) #Handle missing session data gracefully
 
     return render_template(
         'results.html',
