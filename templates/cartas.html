@@ -21,8 +21,8 @@
     </div>
     <div class="container-botoes" style="display: none;">
         <button type="button" id="leituraButton" class="botao-texto-grande">vamos fazer a leitura</button>
-        <!-- <button type="submit" class="botao-texto-grande"> -->
-            vamos fazer a leitura
+        <!-- <button type="submit" class="botao-texto-grande"> 
+            vamos fazer a leitura -->
         </button>
     </div>
 </div>
@@ -96,32 +96,39 @@ document.addEventListener('DOMContentLoaded', function () {
     //     form.submit();
     // });
     
-    document.getElementById('leituraButton').addEventListener('click', function (e) {
+    document.getElementById('leituraButton').addEventListener('click', function(e) {
         e.preventDefault();
         const formData = new FormData();
         formData.append('selected_cards_data', JSON.stringify(selectedCardsData));
-        
+
         fetch("{{ url_for('results') }}", {
             method: 'POST',
             body: formData,
-            credentials: 'include' // This is crucial to send cookies!
+            credentials: 'include'
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Handle errors more gracefully, showing user-friendly messages
+                if (response.status === 400) {
+                    return response.text().then(text => {
+                        alert('Bad Request: ' + text); // or better error handling
+                    });
+                } else if (response.status === 500) {
+                    alert('Internal Server Error. Please try again later.'); // or better error handling
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
             }
-            return response.text();
+            return response.text(); // only proceed if successful
         })
         .then(data => {
-             //Handle response (optional - you might not need this unless you are processing the result on the client side)
-            //console.log(data);
+            //Redirect only if the response is successful
             window.location.href = "{{ url_for('results') }}";
         })
         .catch(error => {
             console.error('Error submitting form:', error);
             alert('An error occurred. Please try again.');
         });
-
     });
 
 });
