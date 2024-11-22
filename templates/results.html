@@ -44,10 +44,16 @@
 </div>
 
 <!-- Incluindo o script do Socket.IO -->
-<script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/2.0.3/marked.min.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
 <script>
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
     const socket = io();
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
@@ -63,10 +69,23 @@
     let tarotReading = '';
     let isFirstChatOpen = true;
 
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
-        choosed_cards: {{ choosed_cards | tojson }}
+        choosed_cards: {{ choosed_cards | tojson }},
+        csrf_token: getCookie('csrf_token')
+    });
+
+    socket.on('generation_error', function (data) {
+        console.error("CSRF Error:", data.message);
+        // Handle the error appropriately, e.g., show a message to the user
+        alert("An error occurred. Please refresh the page.");
     });
 
     socket.on('generation_complete', function(data) {
@@ -75,7 +94,7 @@
         document.getElementById('tarot-reading').innerHTML = data.reading;
         tarotReading = data.reading;
         
-        setTimeout(checkContentOverflow, 100);
+        setTimeout(checkContentOverflow, 40000);
     });
 
     function checkContentOverflow() {
@@ -145,43 +164,9 @@
         }
     }
 
-    socket.on('connect', () => {
-        console.log("Connected to Socket.IO");
-        socket.emit('start_generation', {  // Now you can safely emit this
-            intencao: "{{ intencao }}",
-            selected_cards: "{{ selected_cards }}",
-            choosed_cards: {{ choosed_cards | tojson }}
-        });
-    });
-
     socket.on('receive_message', (data) => {
         removeLoadingIndicator();
         addMessage('bot', data.message);
-    });
-
-    socket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error);
-        if (error.message === 'Session cookie missing.') {
-            alert('Your session has expired. Please return to the main page.');
-            window.location.href = '/';  // Redirect
-        }  else if (error.message === 'Session not found. Please refresh or log in again.') {
-            // Handle "Session not found" error consistently
-            alert('Session not found. Please return to the main page.');
-            window.location.href = '/';
-        }  // Add more specific error handling as needed
-    });
-
-      // Listen for the session_error event (emitted by the server)
-    socket.on('session_error', (data) => {
-        console.error('Session error:', data.message);
-        alert(data.message + " Please return to the main page."); 
-        window.location.href = '/'; // Ensure redirection
-    });
-
-
-     // Listener for redirect
-    socket.on('redirect', (data) => {
-        window.location.href = data.url; // Redirect the user
     });
 
     function showLoadingIndicator() {

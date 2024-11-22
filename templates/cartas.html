@@ -20,48 +20,40 @@
         {% endfor %}
     </div>
     <div class="container-botoes" style="display: none;">
-        <button type="button" id="leituraButton" class="botao-texto-grande">vamos fazer a leitura</button>
-        <!-- <button type="submit" class="botao-texto-grande"> 
-            vamos fazer a leitura -->
+        <button type="button" class="botao-texto-grande" id="leituraButton">
+            vamos fazer a leitura
         </button>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
+<script nonce="{{ g.nonce }}">
+document.addEventListener('DOMContentLoaded', function () {  
     const cards = document.querySelectorAll('.card');
     const containerBotoes = document.querySelector('.container-botoes');
     const leituraButton = document.querySelector('.botao-texto-grande');
     const selectedCardsCount = {{ selected_cards }};
+
     let clickedCards = 0;
     let selectedCardsData = [];
-
-
     cards.forEach(card => {
         card.addEventListener('click', () => {
             if (card.classList.contains('clicked') || clickedCards >= selectedCardsCount) {
                 return;
             }
-
             const imageUrl = card.getAttribute('data-image');
             const cardName = card.getAttribute('data-name');
             const cardValue = card.getAttribute('data-value');
             const animationDuration = 1000;
-
             card.style.transition = `transform ${animationDuration}ms ease`;
-
             if (cardValue === 'invertido') {
                 card.style.transform = "rotateX(180deg)";
             } else {
                 card.style.transform = "rotateY(180deg)";
             }
-
             setTimeout(() => {
-                card.style.backgroundImage = `url(${imageUrl})`;
+                card.style.backgroundImage = `url("${imageUrl}")`;
                 card.classList.add('clicked');
                 clickedCards++;
                 selectedCardsData.push({ name: cardName, value: cardValue });
-
                 if (clickedCards === selectedCardsCount) {
                     containerBotoes.style.display = 'block';
                     disableUnselectedCards();
@@ -69,7 +61,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }, animationDuration / 3);
         });
     });
-
     function disableUnselectedCards() {
         cards.forEach(card => {
             if (!card.classList.contains('clicked')) {
@@ -77,60 +68,25 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-
-    // leituraButton.addEventListener('click', function (e) {
-    //     e.preventDefault(); 
-
-    //     const form = document.createElement('form');
-    //     form.method = 'POST';
-    //     form.action = '{{ url_for("results") }}';
-
-    //     const input = document.createElement('input');
-    //     input.type = 'hidden';
-    //     input.name = 'selected_cards_data';
-    //     input.value = JSON.stringify(selectedCardsData);
-
-    //     form.appendChild(input);
-    //     document.body.appendChild(form);
-
-    //     form.submit();
-    // });
-    
-    document.getElementById('leituraButton').addEventListener('click', function(e) {
+    leituraButton.addEventListener('click', function (e) {
         e.preventDefault();
-        const formData = new FormData();
-        formData.append('selected_cards_data', JSON.stringify(selectedCardsData));
-
-        fetch("{{ url_for('results') }}", {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        })
-        .then(response => {
-            if (!response.ok) {
-                // Handle errors more gracefully, showing user-friendly messages
-                if (response.status === 400) {
-                    return response.text().then(text => {
-                        alert('Bad Request: ' + text); // or better error handling
-                    });
-                } else if (response.status === 500) {
-                    alert('Internal Server Error. Please try again later.'); // or better error handling
-                } else {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-            }
-            return response.text(); // only proceed if successful
-        })
-        .then(data => {
-            //Redirect only if the response is successful
-            window.location.href = "{{ url_for('results') }}";
-        })
-        .catch(error => {
-            console.error('Error submitting form:', error);
-            alert('An error occurred. Please try again.');
-        });
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("results") }}';
+        const dataInput = document.createElement('input');
+        dataInput.type = 'hidden';
+        dataInput.name = 'selected_cards_data';
+        dataInput.value = JSON.stringify(selectedCardsData);
+        form.appendChild(dataInput);
+        // CSRF Token: This is the crucial addition
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token'; // Make sure the name matches your backend
+        csrfInput.value = '{{ csrf_token() }}'; // Use Jinja to get the token
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
     });
-
 });
 </script>
 {% endblock %}
