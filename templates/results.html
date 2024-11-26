@@ -82,10 +82,9 @@
         csrf_token: '{{ csrf_token() }}'
     });
 
-    socket.on('generation_error', function (data) {
-        console.error("CSRF Error:", data.message);
-        // Handle the error appropriately, e.g., show a message to the user
-        alert("An error occurred. Please refresh the page.");
+    socket.on('generation_error', (data) => {
+        console.error('Socket.IO error:', data.message);
+        alert(data.message || 'Ocorreu um erro na geração da leitura.');
     });
 
     socket.on('generation_complete', function(data) {
@@ -93,9 +92,8 @@
         resultArea.style.display = 'block';
         document.getElementById('tarot-reading').innerHTML = data.reading;
         tarotReading = data.reading;
-        
-        setTimeout(checkContentOverflow, 40000);
     });
+
 
     function checkContentOverflow() {
         if (resultArea.scrollHeight > contentWrapper.clientHeight) {
