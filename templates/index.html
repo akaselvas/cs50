@@ -52,13 +52,6 @@
             });
         });
 
-        socket.emit('start_generation', {
-            intencao: "{{ intencao }}",
-            selected_cards: "{{ selected_cards }}",
-            choosed_cards: {{ choosed_cards | tojson }},
-            csrf_token: '{{ csrf_token() }}' // Pass CSRF token to SocketIO
-        });
-    
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
 

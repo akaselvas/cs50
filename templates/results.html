@@ -79,7 +79,7 @@
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
         choosed_cards: {{ choosed_cards | tojson }},
-        csrf_token: getCookie('csrf_token')
+        csrf_token: '{{ csrf_token() }}'
     });
 
     socket.on('generation_error', function (data) {
