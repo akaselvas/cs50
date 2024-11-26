@@ -1,41 +1,40 @@
 {% extends "layout.html" %}
+
 {% block content %}
-<div class="insideIndex">
-    <div class="texto-destacado">
-        <p>desvende os mistérios do Tarot com a ajuda da inteligência artificial, explore as profundezas da sua alma e
+    <div class="insideIndex">
+        <div class="texto-destacado">
+            <p>desvende os mistérios do Tarot com
+            a ajuda da inteligência artificial,
+            explore as profundezas da sua alma e 
             encontre respostas para suas perguntas.</p>
-    </div>
-    <div class="txt-parafrafo">
-        <p>quer saber o que o futuro reserva?</p>
-        <p>digite sua intenção no campo abaixo para uma leitura personalizada, se preferir manter a intenção em segredo
-            deixe o campo em branco.</p>
-    </div>
-    <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div>
-            <input type="text" id="intencao" class="chat-input" name="intencao"
-                placeholder="Escreva sua intenção aqui..." autocomplete="off">
         </div>
         <div class="txt-parafrafo">
-            <p>escolha com quantas cartas você quer jogar</p>
-            <div class="container-botoes">
-                <button type="button" class="botao-personalizado" data-value="1">1</button>
-                <button type="button" class="botao-personalizado" data-value="3">3</button>
-                <button type="button" class="botao-personalizado" data-value="5">5</button>
+            <p>quer saber o que o futuro reserva? </p>
+            <p>digite sua intenção no campo abaixo para uma leitura personalizada,
+            se preferir manter a intenção em segredo deixe o campo em branco.</p>
+        </div>
+        <form id="tarotForm" action="{{ url_for('process_form') }}" method="post">
+            <div>
+                <input type="text" id="intencao" name="intencao" placeholder="Escreva sua intenção aqui"  autocomplete="off">
             </div>
-        </div>
-        <input type="hidden" id="selectedCards" name="selectedCards" value="">
-        <div>
-            <button type="submit" class="botao-texto-grande">
-                vamos começar
-            </button>
-        </div>
-    </form>
-</div>
+            <div class="txt-parafrafo">
+                <p>escolha com quantas cartas você quer jogar</p>
 
-<script nonce="{{ g.nonce }}">
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('tarotForm');
+                <div class="container-botoes">
+                    <button type="button" class="botao-personalizado" data-value="1">1</button>
+                    <button type="button" class="botao-personalizado" data-value="3">3</button>
+                    <button type="button" class="botao-personalizado" data-value="5">5</button>
+                </div>
+            </div>
+            <input type="hidden" id="selectedCards" name="selectedCards" value="">
+            <div>
+                <button type="submit" class="botao-texto-grande">
+                    vamos começar
+                </button>
+            </div>
+        </form>
+    </div>
+    <script>
         const botoes = document.querySelectorAll('.botao-personalizado');
         const selectedCardsInput = document.getElementById('selectedCards');
         
@@ -48,46 +47,16 @@
                 });
                 botao.classList.add('active');
                 botao.style.opacity = '1';
-                selectedCardsInput.value = botao.dataset.value;
+                botao.disabled = false;
+                selectedCardsInput.value = botao.getAttribute('data-value');
             });
         });
-
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-
+        
+        document.getElementById('tarotForm').addEventListener('submit', function(e) {
             if (!selectedCardsInput.value) {
+                e.preventDefault();
                 alert('Por favor, selecione o número de cartas antes de continuar.');
-                return;
-            }
-
-            const formData = new FormData(form);
-            
-            try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    window.location.href = data.redirect;
-                } else {
-                    if (data.error && data.error.includes('CSRF')) {
-                        window.location.reload();
-                        return;
-                    }
-                    alert(data.error || 'Ocorreu um erro. Por favor, tente novamente.');
-                }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('Ocorreu um erro. Por favor, tente novamente.');
             }
         });
-    });
-</script>
+    </script>
 {% endblock %}

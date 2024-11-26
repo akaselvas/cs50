@@ -1,7 +1,6 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<meta name="csrf-token" content="{{ csrf_token() }}">
 <div class="insideResult">
     <div id="content-wrapper" class="content-wrapper">
         <div class="txt-resultado">
@@ -45,46 +44,11 @@
 </div>
 
 <!-- Incluindo o script do Socket.IO -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/2.0.3/marked.min.js"></script>
+
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-
-    console.log('Results page JavaScript initialized');
-    
-    // Logging socket events
-    socket.on('connect', () => {
-        console.log('Socket.IO connection established');
-    });
-
-    socket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error);
-    });
-      
-
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-    if (!csrfToken) {
-        console.error('CSRF token not found');
-        alert('Security token is missing. Please refresh the page.');
-        return;
-    }
-
-    const choosedCardsData = JSON.parse(localStorage.getItem('choosedCardsData') || '[]');
-
-    console.log('Preparing to emit start_generation with:', {
-        intencao: "{{ intencao }}",
-        selected_cards: "{{ selected_cards }}",
-        choosed_cards: choosedCardsData,
-        csrf_token: csrfToken
-    });
-
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
+    const socket = io();
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
     const shadowOverlay = document.getElementById('shadow-overlay');
@@ -99,85 +63,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let tarotReading = '';
     let isFirstChatOpen = true;
 
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
-    // socket.emit('start_generation', {
-    //     intencao: "{{ intencao }}",
-    //     selected_cards: "{{ selected_cards }}",
-    //     choosed_cards: {{ choosed_cards | tojson }},
-    //     csrf_token: '{{ csrf_token() }}'
-    // });
-
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
-        choosed_cards: choosedCardsData,
-        csrf_token: csrfToken
-    });
-
-    socket.on('generation_error', (data) => {
-        console.error('Socket.IO generation error:', data);
-        
-        // Update UI to show error
-        const resultArea = document.getElementById('result-area');
-        const loadingMessage = document.getElementById('loading-message');
-        
-        if (resultArea) resultArea.style.display = 'block';
-        if (loadingMessage) loadingMessage.innerHTML = `
-            <div class="error-message">
-                Erro na geração da leitura: ${data.message || 'Erro desconhecido'}
-                <br>
-                Por favor, tente novamente.
-            </div>
-        `;
+        choosed_cards: {{ choosed_cards | tojson }}
     });
 
     socket.on('generation_complete', function(data) {
-        console.log('Generation completed', data);
-
-        const loadingMessage = document.getElementById('loading-message');
-        const resultArea = document.getElementById('result-area');
-        const tarotReading = document.getElementById('tarot-reading');
-
-        if (loadingMessage) loadingMessage.style.display = 'none';
-        if (resultArea) resultArea.style.display = 'block';
+        document.getElementById('loading-message').style.display = 'none';
+        resultArea.style.display = 'block';
+        document.getElementById('tarot-reading').innerHTML = data.reading;
+        tarotReading = data.reading;
         
-        if (tarotReading) {
-            tarotReading.innerHTML = data.reading;
-            
-            // Additional check for empty reading
-            if (!data.reading.trim()) {
-                console.warn('Received empty reading');
-                tarotReading.innerHTML = 'Não foi possível gerar a leitura. Por favor, tente novamente.';
-            }
-        }
-
-        // Store tarot reading for chat context
-        localStorage.setItem('tarotReading', data.reading);
-    });
-
-    const generationTimeout = setTimeout(() => {
-        console.error('Generation request timed out');
-        
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.innerHTML = `
-                <div class="error-message">
-                    A geração da leitura está demorando mais do que o esperado. 
-                    <br>
-                    Por favor, atualize a página ou tente novamente.
-                </div>
-            `;
-        }
-    }, 45000); // 45 seconds timeout
-
-    // Clear timeout on successful generation
-    socket.on('generation_complete', () => {
-        clearTimeout(generationTimeout);
+        setTimeout(checkContentOverflow, 100);
     });
 
     function checkContentOverflow() {
@@ -237,29 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') sendMessage();
     });
 
-    // function sendMessage() {
-    //     const message = userInput.value.trim();
-    //     if (message) {
-    //         addMessage('user', message);
-    //         showLoadingIndicator();
-    //         socket.emit('send_message', { message: message, tarot_reading: tarotReading });
-    //         userInput.value = '';
-    //     }
-    // }
-
     function sendMessage() {
         const message = userInput.value.trim();
         if (message) {
             addMessage('user', message);
             showLoadingIndicator();
-            
-            // Retrieve tarot reading from localStorage
-            const tarotReading = localStorage.getItem('tarotReading') || '';
-            
-            socket.emit('send_message', { 
-                message: message, 
-                tarot_reading: tarotReading 
-            });
+            socket.emit('send_message', { message: message, tarot_reading: tarotReading });
             userInput.value = '';
         }
     }
@@ -303,7 +184,5 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
-})
 </script>
 {% endblock %}
