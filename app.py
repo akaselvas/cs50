@@ -20,26 +20,18 @@ from flask_session import Session
 from flask_socketio import SocketIO, emit
 from flask_talisman import Talisman
 from flask_wtf import FlaskForm
-from flask_wtf.csrf import CSRFProtect
-from flask_wtf.csrf import CSRFError
-from flask_wtf.csrf import generate_csrf
-from flask_wtf.csrf import validate_csrf
-
-from wtforms.validators import ValidationError  # You need this import for handling CSRF errors
-
-
+from flask_wtf.csrf import CSRFProtect, CSRFError, generate_csrf, validate_csrf
+from wtforms.validators import ValidationError
 from markupsafe import Markup
-
 
 
 # Load environment variables
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s') # Enhanced logging
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
+# Changed async_mode to 'threading' for increased stability during deployment.
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  
 
 # Enhanced security configurations
 app.config.update(
@@ -312,25 +304,24 @@ def results():
 
 @socketio.on('start_generation')
 def handle_generation(data):
-    csrf_token = data.get('csrf_token')  # Safely get the csrf_token from the data
-    
+    csrf_token = data.get('csrf_token')
     if not csrf_token:
-        emit('generation_error', {'message': 'CSRF token missing.'}) # Emit an error event
+        emit('generation_error', {'message': 'CSRF token missing.'})
         return
 
     try:
-        validate_csrf(csrf_token) # Validate the token
-    except ValidationError as e:  # Catch validation errors
-        emit('generation_error', {'message': str(e)}) # Emit an error event
+        validate_csrf(csrf_token)  # Validate the token
+    except ValidationError as e:
+        emit('generation_error', {'message': str(e)})
         return
-    
+
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
+    
+    logging.info(f"Generating tarot reading: intention='{intencao}', selected_cards={selected_cards}, choosed_cards={choosed_cards}") # Added logging
+
     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-    
-    print(f"CSRF Token: {csrf_token}")  # Now it will only print if csrf_token is defined
-    
     emit('generation_complete', {'reading': reading_html})
 
 
@@ -365,4 +356,4 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
     return markdown_to_html(reading)
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0') #Removed debug mode for production. Host=0.0.0.0 for Render

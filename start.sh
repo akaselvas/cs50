@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Monkey-patch
-exec python -c "import gevent.monkey; gevent.monkey.patch_all(ssl=True); import app" #  <-- **FIX APP IMPORT PATH HERE**
+# NO MONKEY PATCHING NEEDED - LET GUNICORN HANDLE GEVENT
 
-# Run gunicorn with error logging
-exec gunicorn -k gevent app:app -b 0.0.0.0:$PORT --error-logfile -  # <-- **FIX APP:APP IF NEEDED**
+# Run gunicorn with error logging and process management
+exec gunicorn -k gevent app:app -b 0.0.0.0:$PORT --error-logfile - --workers 3 --threads 2
