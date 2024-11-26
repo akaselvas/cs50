@@ -9,6 +9,7 @@ import markdown
 import redis
 import bleach
 import threading
+import time
 
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -345,10 +346,15 @@ def handle_message(data: Dict[str, str]):
         emit('receive_message', {'message': "An error occurred while processing your request. Please try again later."})
 
 def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: List[Dict[str, str]]) -> str:
+    start_time = time.time()
+
     prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}"
     logging.info(f"Prompt sent to the API: {prompt}") # logging added to check this part
     try:
         response = model.generate_content(prompt)
+        end_time = time.time()
+        api_call_time = end_time - start_time
+        logging.info(f"API call completed in {api_call_time:.4f} seconds. Response length: {len(response.text)}")
         reading = response.text or "Unable to generate reading."
         logging.info(f"API Response: {reading}") # logging added to check the response
         return markdown_to_html(reading)
