@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 app = Flask(__name__)
 # Changed async_mode to 'threading' for increased stability during deployment.
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  
+# socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", ping_timeout=30, ping_interval=10)
 
 # Enhanced security configurations
 app.config.update(
@@ -304,16 +305,48 @@ def results():
 #     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
 #     emit('generation_complete', {'reading': reading_html})
 
+# -------------------------------------------------------------------------
+
+# @socketio.on('start_generation')
+# def handle_generation(data):
+#     csrf_token = data.get('csrf_token')
+#     if not csrf_token:
+#         emit('generation_error', {'message': 'CSRF token missing.'})
+#         return
+
+#     try:
+#         validate_csrf(csrf_token)  # Validate the token
+#     except ValidationError as e:
+#         emit('generation_error', {'message': str(e)})
+#         return
+
+#     intencao = data.get('intencao', '')
+#     selected_cards = data.get('selected_cards', '')
+#     choosed_cards = data.get('choosed_cards', [])
+    
+#     logging.info(f"Generating tarot reading: intention='{intencao}', selected_cards={selected_cards}, choosed_cards={choosed_cards}") # Added logging
+
+#     reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+#     emit('generation_complete', {'reading': reading_html})
+
+# -------------------------------------------------------------------------
+
 @socketio.on('start_generation')
 def handle_generation(data):
+    logging.info(f"Received socket.io generation request: {data}")
+    
     csrf_token = data.get('csrf_token')
+    logging.info(f"CSRF Token received: {csrf_token}")
+    
     if not csrf_token:
+        logging.error("CSRF token missing")
         emit('generation_error', {'message': 'CSRF token missing.'})
         return
 
     try:
         validate_csrf(csrf_token)  # Validate the token
     except ValidationError as e:
+        logging.error(f"CSRF Validation error: {str(e)}")
         emit('generation_error', {'message': str(e)})
         return
 
@@ -321,11 +354,15 @@ def handle_generation(data):
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
     
-    logging.info(f"Generating tarot reading: intention='{intencao}', selected_cards={selected_cards}, choosed_cards={choosed_cards}") # Added logging
+    logging.info(f"Generation parameters - intention: {intencao}, selected_cards: {selected_cards}, choosed_cards: {choosed_cards}")
 
-    reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-    emit('generation_complete', {'reading': reading_html})
-
+    try:
+        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
+        logging.info(f"Generated reading HTML length: {len(reading_html)}")
+        emit('generation_complete', {'reading': reading_html})
+    except Exception as e:
+        logging.exception(f"Unexpected error in handle_generation: {str(e)}")
+        emit('generation_error', {'message': f'Unexpected error: {str(e)}'})
 
 
 @socketio.on('send_message')
