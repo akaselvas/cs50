@@ -23,6 +23,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.csrf import CSRFProtect, CSRFError, generate_csrf, validate_csrf
 from wtforms.validators import ValidationError
 from markupsafe import Markup
+from flask import has_request_context
 
 
 # Load environment variables
@@ -345,15 +346,15 @@ def handle_message(data: Dict[str, str]):
 
 def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: List[Dict[str, str]]) -> str:
     prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}"
-
+    logging.info(f"Prompt sent to the API: {prompt}") # logging added to check this part
     try:
-        response = model.generate_content(prompt)  # Assign the result of predict() to response
-        reading = response.text or "Unable to generate reading." 
+        response = model.generate_content(prompt)
+        reading = response.text or "Unable to generate reading."
+        logging.info(f"API Response: {reading}") # logging added to check the response
+        return markdown_to_html(reading)
     except Exception as e:
-        logging.error(f"Error in tarot reading generation: {str(e)}")
-        reading = "We're sorry, but we couldn't generate your tarot reading at this time. Please try again later."
+        logging.exception(f"Error in API call: {str(e)}") # Enhanced error logging
+        return markdown_to_html(f"An error occurred during API processing: {str(e)}")
     
-    return markdown_to_html(reading)
-
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0') #Removed debug mode for production. Host=0.0.0.0 for Render
+    socketio.run(app, debug=True, host='0.0.0.0') #Removed debug mode for production. Host=0.0.0.0 for Render
