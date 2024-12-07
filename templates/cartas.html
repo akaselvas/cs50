@@ -77,26 +77,26 @@
     
         // Add form submission handling
         leituraButton.addEventListener('click', function(e) {
-            e.preventDefault(); // Prevent the default button behavior
+        e.preventDefault(); // Prevent the default button behavior
 
-            // Create a form dynamically
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '{{ url_for("results") }}';
+        // Create a form dynamically
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("results") }}';
 
-            // Create a hidden input for the selected cards data
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'selected_cards_data';
-            input.value = JSON.stringify(selectedCardsData);
+        // Create a hidden input for the selected cards data
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_cards_data';
+        input.value = JSON.stringify(selectedCardsData);
 
-            // Append the input to the form, and the form to the body
-            form.appendChild(input);
-            document.body.appendChild(form);
+        // Append the input to the form, and the form to the body
+        form.appendChild(input);
+        document.body.appendChild(form);
 
-            // Submit the form
-            form.submit();
-        });
+        // Submit the form
+        form.submit();
+    });
     });
     </script>
 {% endblock %}
