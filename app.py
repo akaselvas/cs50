@@ -8,12 +8,16 @@ import random
 import json
 import secrets
 from dotenv import load_dotenv
-from rq import Queue
+from rq import Queue, Retry
 import redis
+import logging
 import threading
 
+# Configure logging (important for debugging)
+logging.basicConfig(level=logging.INFO)
+
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='threading') 
 
 load_dotenv()
 
@@ -135,6 +139,7 @@ def generate_tarot_reading(intencao, selected_cards, choosed_cards):
         reading = response.text if response else "Unable to generate reading."
         return markdown_to_html(reading)
     except Exception as e:
+        logging.exception(f"Error generating tarot reading: {str(e)}") #Log the error
         return f"Error generating tarot reading: {str(e)}"
 
 # Função que lida com a geração da leitura via SocketIO
@@ -143,8 +148,8 @@ def handle_generation(data):
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
-    job = q.enqueue(generate_tarot_reading, intencao, selected_cards, choosed_cards)
-    emit('generation_started', {'jobId': job.id}) # Send job ID to client
+    job = q.enqueue(generate_tarot_reading, intencao, selected_cards, choosed_cards, retry=Retry(max=3, interval=[1, 2, 4]))
+    emit('generation_started', {'jobId': job.id})
 
 
 # New function to handle chat messages
@@ -199,10 +204,10 @@ def check_job_status(data):
         elif job.is_failed:
             emit('generation_failed', {'error': job.exc_info})
         else:
-            emit('generation_pending') #Tell the client the job is still pending
+            emit('generation_pending')
     else:
         emit('generation_failed', {'error': 'Job not found'})
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
