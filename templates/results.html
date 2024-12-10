@@ -62,12 +62,22 @@
     const sendMessageButton = document.getElementById('send-message');
     let tarotReading = '';
     let isFirstChatOpen = true;
+    let jobId = null;
 
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
         choosed_cards: {{ choosed_cards | tojson }}
     });
+
+    socket.on('generation_started', (data) => {
+        jobId = data.jobId;
+        checkJobStatus(); //Initial check
+    });
+
+    function checkJobStatus() {
+        socket.emit('check_job', { jobId: jobId });
+    }
 
     socket.on('generation_complete', function(data) {
         document.getElementById('loading-message').style.display = 'none';
@@ -77,6 +87,15 @@
         
         setTimeout(checkContentOverflow, 100);
     });
+
+    socket.on('generation_pending', () => {
+        setTimeout(checkJobStatus, 2000); //Check again in 2 seconds
+    });
+
+    socket.on('generation_failed', (data) => {
+        // ... (Handle errors gracefully) ...
+    });
+
 
     function checkContentOverflow() {
         if (resultArea.scrollHeight > contentWrapper.clientHeight) {

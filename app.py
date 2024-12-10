@@ -8,6 +8,8 @@ import random
 import json
 import secrets
 from dotenv import load_dotenv
+from rq import Queue
+import redis
 import threading
 
 app = Flask(__name__)
@@ -43,6 +45,11 @@ model = create_model()
 # Convert markdown text to HTML safely
 def markdown_to_html(text):
     return Markup(markdown.markdown(text, extensions=['fenced_code', 'codehilite']))
+
+# Redis connection
+redis_url = os.environ.get('REDIS_URL', 'redis://red-cscpbjpu0jms73fah6rg:6379')
+redis_conn = redis.from_url(redis_url)
+q = Queue(connection=redis_conn)  # Create a Redis queue
 
 # Home page route
 @app.route('/')
@@ -123,16 +130,12 @@ def results():
 # Função para gerar a leitura do Tarot em uma thread separada
 def generate_tarot_reading(intencao, selected_cards, choosed_cards):
     prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {choosed_cards}"
-
     try:
-        # Solicita o conteúdo gerado pelo modelo
         response = model.generate_content(prompt)
         reading = response.text if response else "Unable to generate reading."
+        return markdown_to_html(reading)
     except Exception as e:
-        reading = f"Error generating tarot reading: {str(e)}"
-    
-    # Retorna o resultado processado como HTML seguro
-    return markdown_to_html(reading)
+        return f"Error generating tarot reading: {str(e)}"
 
 # Função que lida com a geração da leitura via SocketIO
 @socketio.on('start_generation')
@@ -140,12 +143,8 @@ def handle_generation(data):
     intencao = data.get('intencao', '')
     selected_cards = data.get('selected_cards', '')
     choosed_cards = data.get('choosed_cards', [])
-
-    def generate_and_emit():
-        reading_html = generate_tarot_reading(intencao, selected_cards, choosed_cards)
-        socketio.emit('generation_complete', {'reading': reading_html})
-
-    threading.Thread(target=generate_and_emit).start()
+    job = q.enqueue(generate_tarot_reading, intencao, selected_cards, choosed_cards)
+    emit('generation_started', {'jobId': job.id}) # Send job ID to client
 
 
 # New function to handle chat messages
@@ -189,6 +188,20 @@ def handle_generation(data):
 
     threading.Thread(target=generate_and_emit).start()
 
+@socketio.on('check_job')
+def check_job_status(data):
+    job_id = data.get('jobId')
+    job = q.fetch_job(job_id)
+    if job:
+        if job.is_finished:
+            reading_html = job.result
+            emit('generation_complete', {'reading': reading_html})
+        elif job.is_failed:
+            emit('generation_failed', {'error': job.exc_info})
+        else:
+            emit('generation_pending') #Tell the client the job is still pending
+    else:
+        emit('generation_failed', {'error': 'Job not found'})
 
 
 if __name__ == "__main__":
