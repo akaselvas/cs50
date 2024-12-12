@@ -48,8 +48,8 @@ app.config.update(
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
     SESSION_COOKIE_SECURE=False,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',  # Changed from 'Lax' to 'Strict'
+    SESSION_COOKIE_HTTPONLY=False, # Changed to False to allow javascript to access the token
+    SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_NAME='session',
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
     WTF_CSRF_TIME_LIMIT=1800,
@@ -160,7 +160,7 @@ def refresh_csrf(response):
             generate_csrf(),
             secure=False,
             httponly=False,
-            samesite='Lax',  # Changed from 'Lax' to 'Strict'
+            samesite='Lax',
             max_age=1800,
             domain=None,  # Explicitly set domain to None
             path='/'      # Explicitly set path
