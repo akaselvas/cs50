@@ -44,10 +44,16 @@
 </div>
 
 <!-- Incluindo o script do Socket.IO -->
-<script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/2.0.3/marked.min.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.18/marked.min.js"></script>
 <script>
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
     const socket = io();
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
@@ -62,22 +68,25 @@
     const sendMessageButton = document.getElementById('send-message');
     let tarotReading = '';
     let isFirstChatOpen = true;
-    let jobId = null;
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
 
     socket.emit('start_generation', {
         intencao: "{{ intencao }}",
         selected_cards: "{{ selected_cards }}",
-        choosed_cards: {{ choosed_cards | tojson }}
+        choosed_cards: {{ choosed_cards | tojson }},
+        csrf_token: getCookie('csrf_token')
     });
 
-    socket.on('generation_started', (data) => {
-        jobId = data.jobId;
-        checkJobStatus(); //Initial check
+    socket.on('generation_error', function (data) {
+        console.error("CSRF Error:", data.message);
+        // Handle the error appropriately, e.g., show a message to the user
+        alert("An error occurred. Please refresh the page.");
     });
-
-    function checkJobStatus() {
-        socket.emit('check_job', { jobId: jobId });
-    }
 
     socket.on('generation_complete', function(data) {
         document.getElementById('loading-message').style.display = 'none';
@@ -85,17 +94,8 @@
         document.getElementById('tarot-reading').innerHTML = data.reading;
         tarotReading = data.reading;
         
-        setTimeout(checkContentOverflow, 100);
+        setTimeout(checkContentOverflow, 40000);
     });
-
-    socket.on('generation_pending', () => {
-        setTimeout(checkJobStatus, 2000); //Check again in 2 seconds
-    });
-
-    socket.on('generation_failed', (data) => {
-        // ... (Handle errors gracefully) ...
-    });
-
 
     function checkContentOverflow() {
         if (resultArea.scrollHeight > contentWrapper.clientHeight) {
