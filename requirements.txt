@@ -55,7 +55,7 @@ httplib2==0.22.0
 idna==3.10
 importlib_resources==6.4.5
 itsdangerous==2.2.0
-Jinja2==3.1.4
+Jinja2==3.1.6
 jinja2_markdown==0.0.3
 kombu==5.4.2
 limits==3.13.0
