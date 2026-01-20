@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import json
 import logging
 import os
@@ -191,7 +194,7 @@ generation_config = {
     "max_output_tokens": 8192,
 }
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro-002",
+    model_name="gemini-3-pro-preview",
     generation_config=generation_config
 )
 
