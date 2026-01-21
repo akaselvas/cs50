@@ -175,10 +175,10 @@ if not api_key:
 # Model initialization
 genai.configure(api_key=api_key)
 generation_config = {
-    "temperature": 1,
+    "temperature": 0.7,
     "top_p": 0.95,
     "top_k": 30,
-    "max_output_tokens": 3192,
+    "max_output_tokens": 1000,
 }
 model = genai.GenerativeModel(
     model_name="gemma-3-12b-it",
@@ -349,7 +349,13 @@ def handle_message(data: Dict[str, str]):
         emit('receive_message', {'message': "An error occurred while processing your request. Please try again later."})
 
 def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: List[Dict[str, str]]) -> str:
-    prompt = f"Faça leitura do Tarot. A intenção do usuário é: {intencao}. O usuario tirou {selected_cards} cartas. As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}"
+    prompt = (
+        f"Atue como um tarólogo experiente. Faça uma leitura de Tarot objetiva e concisa. "
+        f"A intenção do usuário é: {intencao}. "
+        f"O usuário tirou {selected_cards} cartas. "
+        f"As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}. "
+        f"Foque na interpretação direta e evite textos excessivamente longos."
+    )
 
     try:
         response = model.generate_content(prompt)  # Assign the result of predict() to response
