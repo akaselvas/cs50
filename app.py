@@ -33,6 +33,7 @@ from wtforms.validators import ValidationError  # You need this import for handl
 
 from markupsafe import Markup
 
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 # Load environment variables
@@ -42,6 +43,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
 
 # Enhanced security configurations
@@ -50,8 +52,8 @@ app.config.update(
     SESSION_TYPE='redis',
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
-    SESSION_COOKIE_SECURE=False,
-    SESSION_COOKIE_HTTPONLY=False, # Changed to False to allow javascript to access the token
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True, # Changed to False to allow javascript to access the token
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_NAME='session',
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
@@ -157,17 +159,18 @@ def before_request():
 @app.after_request
 def refresh_csrf(response):
     if 'text/html' in response.headers.get('Content-Type', ''):
-        # Set a specific expiration time
-        response.set_cookie(
-            'csrf_token',
-            generate_csrf(),
-            secure=False,
-            httponly=False,
-            samesite='Lax',
-            max_age=1800,
-            domain=None,  # Explicitly set domain to None
-            path='/'      # Explicitly set path
-        )
+        # Only set the cookie if the token exists in the session
+        if 'csrf_token' in session:
+            response.set_cookie(
+                'csrf_token',
+                session['csrf_token'], # <--- FIX: Use the existing token
+                secure=True,           # Set to True for Render (HTTPS)
+                httponly=False,
+                samesite='Lax',
+                max_age=1800,
+                domain=None,
+                path='/'
+            )
     return response
 
 # Add a new route to check CSRF token status
