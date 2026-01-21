@@ -55,7 +55,10 @@
     // FIX 3: Get the token from the meta tag we added above
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    const socket = io();
+    const socket = io({
+        transports: ['websocket'], // Force WebSocket, disable polling
+        upgrade: false
+    });
     const contentWrapper = document.getElementById('content-wrapper');
     const resultArea = document.getElementById('result-area');
     const shadowOverlay = document.getElementById('shadow-overlay');
