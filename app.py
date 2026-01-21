@@ -354,7 +354,7 @@ def generate_tarot_reading(intencao: str, selected_cards: str, choosed_cards: Li
         f"A intenção do usuário é: {intencao}. "
         f"O usuário tirou {selected_cards} cartas. "
         f"As cartas tiradas são: {json.dumps(choosed_cards, ensure_ascii=False)}. "
-        f"Foque na interpretação direta e evite textos excessivamente longos."
+        # f"Foque na interpretação direta e evite textos excessivamente longos."
     )
 
     try:
