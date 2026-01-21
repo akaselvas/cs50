@@ -46,9 +46,13 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")  # Use gevent for WebSockets
 
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    raise ValueError("No SECRET_KEY set for Flask application")
+
 # Enhanced security configurations
 app.config.update(
-    SECRET_KEY=os.getenv('SECRET_KEY', secrets.token_urlsafe(32)),
+    SECRET_KEY=secret_key,
     SESSION_TYPE='redis',
     SESSION_PERMANENT=False,
     SESSION_USE_SIGNER=True,
@@ -87,33 +91,13 @@ limiter = Limiter(
 
 csp={
     'default-src': "'self'",
-    'style-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "https://fonts.googleapis.com",
-        "https://fonts.gstatic.com",
-    ],
-    'script-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        "https://cdnjs.cloudflare.com",
-    ],
-    'font-src': [
-        "'self'",
-        "https://fonts.googleapis.com",
-        "https://fonts.gstatic.com",
-    ],
-    'img-src': [
-        "'self'",
-        "data:",
-    ],
-    'connect-src': [
-        "'self'",
-        "wss:",
-        "ws:",
-    ]
+    'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
+    'font-src': ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+    'img-src': ["'self'", "data:"],
+    'connect-src': ["'self'", "wss:", "ws:"]
 }
+
 
 
 # Talisman(app)
@@ -152,36 +136,36 @@ def handle_csrf_error(e):
 @app.before_request
 def before_request():
     g.nonce = secrets.token_hex(16)
-    if 'csrf_token' not in session:
-        session['csrf_token'] = generate_csrf()
+    # REMOVED: Manual session['csrf_token'] assignment. 
+    # Flask-WTF handles this automatically when {{ csrf_token() }} is called
 
 
-@app.after_request
-def refresh_csrf(response):
-    if 'text/html' in response.headers.get('Content-Type', ''):
-        # Only set the cookie if the token exists in the session
-        if 'csrf_token' in session:
-            response.set_cookie(
-                'csrf_token',
-                session['csrf_token'], # <--- FIX: Use the existing token
-                secure=True,           # Set to True for Render (HTTPS)
-                httponly=False,
-                samesite='Lax',
-                max_age=1800,
-                domain=None,
-                path='/'
-            )
-    return response
+# @app.after_request
+# def refresh_csrf(response):
+#     if 'text/html' in response.headers.get('Content-Type', ''):
+#         # Only set the cookie if the token exists in the session
+#         if 'csrf_token' in session:
+#             response.set_cookie(
+#                 'csrf_token',
+#                 session['csrf_token'], # <--- FIX: Use the existing token
+#                 secure=True,           # Set to True for Render (HTTPS)
+#                 httponly=False,
+#                 samesite='Lax',
+#                 max_age=1800,
+#                 domain=None,
+#                 path='/'
+#             )
+#     return response
 
 # Add a new route to check CSRF token status
-@app.route('/check_csrf')
-def check_csrf():
-    csrf_token = session.get('csrf_token')
-    cookie_token = request.cookies.get('csrf_token')
-    return jsonify({
-        'session_token': bool(csrf_token),
-        'cookie_token': bool(cookie_token)
-    })
+# @app.route('/check_csrf')
+# def check_csrf():
+#     csrf_token = session.get('csrf_token')
+#     cookie_token = request.cookies.get('csrf_token')
+#     return jsonify({
+#         'session_token': bool(csrf_token),
+#         'cookie_token': bool(cookie_token)
+#     })
 
 # API key handling
 api_key = os.getenv("GENAI_API_KEY")
@@ -194,7 +178,7 @@ generation_config = {
     "temperature": 1,
     "top_p": 0.95,
     "top_k": 30,
-    "max_output_tokens": 8192,
+    "max_output_tokens": 3192,
 }
 model = genai.GenerativeModel(
     model_name="gemma-3-12b-it",
@@ -240,18 +224,23 @@ def home():
     return render_template('index.html', form=form)
 
 
-@app.route('/get_csrf')
-def get_csrf():
-    csrf_token = generate_csrf()
-    return jsonify({'csrf_token': csrf_token})
+# @app.route('/get_csrf')
+# def get_csrf():
+#     csrf_token = generate_csrf()
+#     return jsonify({'csrf_token': csrf_token})
 
 @app.route('/process_form', methods=['POST'])
 def process_form():
     form = TarotForm()
     
-    # Explicitly check CSRF token
-    if not form.csrf_token.validate(form):
-        return jsonify({'error': 'Invalid CSRF token'}), 400
+    # This validate call checks the token against the session automatically
+    if not form.validate_on_submit():
+        # If validation fails, check specifically for CSRF error to log it
+        if form.csrf_token.errors:
+            logging.warning(f"CSRF Error: {form.csrf_token.errors}")
+            return jsonify({'error': 'Invalid CSRF token'}), 400
+        # If other validation fails
+        return jsonify({'error': 'Form validation failed'}), 400
         
     intencao = sanitize_input(request.form.get('intencao', '').strip())
     selected_cards = request.form.get('selectedCards')
@@ -266,6 +255,7 @@ def process_form():
     session['selected_cards'] = selected_cards
 
     return jsonify({'redirect': url_for('cartas')})
+
 
 
 @app.route('/cartas')
